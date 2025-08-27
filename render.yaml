@@ -1,5 +1,5 @@
 # render.yaml
-# Definición de la infraestructura para el despliegue en Render
+# Infraestructura para despliegue en Render
 
 databases:
   # 1. Base de Datos PostgreSQL
@@ -10,15 +10,16 @@ databases:
     postgresMajorVersion: 14
 
 services:
-  # 2. Servicio Redis
+  # 2. Redis gestionado por Render
   - type: redis
     name: ecopila-redis
     plan: free
-    ipAllowList: [] # vacío = solo accesible desde otros servicios de Render
+    ipAllowList: [] # solo accesible desde servicios de Render
 
-  # 3. Servicio de Eureka
+  # 3. Eureka Service
   - type: web
     name: eureka-service
+    env: JAVA_SPRING_BOOT
     dockerfilePath: ./eureka-service/Dockerfile
     buildFilter:
       paths:
@@ -34,6 +35,7 @@ services:
   # 4. API Gateway
   - type: web
     name: gateway
+    env: JAVA_SPRING_BOOT
     dockerfilePath: ./gateway/Dockerfile
     buildFilter:
       paths:
@@ -57,6 +59,7 @@ services:
   # 5. Auth Service
   - type: web
     name: auth-service
+    env: JAVA_SPRING_BOOT
     dockerfilePath: ./auth-service/Dockerfile
     buildFilter:
       paths:
@@ -86,6 +89,7 @@ services:
   # 6. Producto Service
   - type: web
     name: producto-service
+    env: JAVA_SPRING_BOOT
     dockerfilePath: ./microservicio_producto/Dockerfile
     buildFilter:
       paths:
@@ -115,6 +119,7 @@ services:
   # 7. Proveedor Service
   - type: web
     name: proveedor-service
+    env: JAVA_SPRING_BOOT
     dockerfilePath: ./microservicio_proveedor/Dockerfile
     buildFilter:
       paths:
@@ -144,6 +149,7 @@ services:
   # 8. Tipo Producto Service
   - type: web
     name: tipo-producto-service
+    env: JAVA_SPRING_BOOT
     dockerfilePath: ./microservicio_tipo_producto/Dockerfile
     buildFilter:
       paths:
@@ -173,6 +179,7 @@ services:
   # 9. Dolar Service
   - type: web
     name: dolar-service
+    env: JAVA_SPRING_BOOT
     dockerfilePath: ./microservicio_dolar/Dockerfile
     buildFilter:
       paths:
@@ -202,6 +209,7 @@ services:
   # 10. SymmetricDS Master
   - type: web
     name: symmetricds-master
+    env: JAVA_SPRING_BOOT
     dockerfilePath: ./symmetricds/master/Dockerfile
     buildFilter:
       paths:
@@ -222,5 +230,3 @@ services:
         chmod +x /app/init-symmetric-master.sh &&
         exec /app/init-symmetric-master.sh
       "
-
-
