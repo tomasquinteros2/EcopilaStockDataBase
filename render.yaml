@@ -1,18 +1,20 @@
 # render.yaml
 # Definición de la infraestructura para el despliegue en Render
 
-services:
+databases:
   # 1. Base de Datos PostgreSQL
-  - type: postgres
-    name: ecopila-postgres-db
+  - name: ecopila-postgres-db
+    databaseName: ecopila
+    user: ecopila_user
     plan: free
     postgresMajorVersion: 14
 
-  # 2. Servicio Redis
+services:
+  # 2. Servicio Redis (gestionado por Render)
   - type: redis
     name: ecopila-redis
     plan: free
-    ipAllowList: [] # vacío = solo accesible desde servicios de Render
+    ipAllowList: [] # vacío = solo accesible desde otros servicios de Render
 
   # 3. Servicio de Eureka
   - type: web
@@ -220,3 +222,4 @@ services:
         chmod +x /app/init-symmetric-master.sh &&
         exec /app/init-symmetric-master.sh
       "
+
