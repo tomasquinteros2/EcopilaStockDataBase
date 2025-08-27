@@ -2,27 +2,21 @@
 # Definición de la infraestructura para el despliegue en Render
 
 services:
-  # 1. Base de Datos PostgreSQL (Servicio Gestionado de Render)
-  - type: pserv # PostgreSQL Service
+  # 1. Base de Datos PostgreSQL
+  - type: postgres
     name: ecopila-postgres-db
-    plan: free # Puedes cambiar a 'starter' o 'standard' si necesitas más recursos
+    plan: free
     postgresMajorVersion: 14
-    # disk: # Opcional: Si necesitas persistencia de datos más allá del ciclo de vida del servicio
-    #   name: ecopila-db-disk
-    #   sizeGB: 10
 
-  # 2. Servicio de Caché Redis (Servicio Gestionado de Render)
+  # 2. Servicio Redis
   - type: redis
     name: ecopila-redis
-    plan: free # Puedes cambiar a 'starter' o 'standard'
-    ipAllowList: # Permite conexiones solo desde los servicios de Render
-      - source: 0.0.0.0/0
-        description: Allow all internal Render IPs
+    plan: free
+    ipAllowList: [] # vacío = solo accesible desde servicios de Render
 
-  # 3. Servicio de Descubrimiento Eureka
+  # 3. Servicio de Eureka
   - type: web
     name: eureka-service
-    env: JAVA_SPRING_BOOT # Render optimiza el despliegue para apps Spring Boot
     dockerfilePath: ./eureka-service/Dockerfile
     buildFilter:
       paths:
@@ -34,15 +28,10 @@ services:
     envVars:
       - key: SPRING_PROFILES_ACTIVE
         value: online
-    # Puerto interno de Eureka (no es necesario exponerlo públicamente)
-    # Render se encarga de la comunicación interna
-    ports:
-      - 8761
 
   # 4. API Gateway
   - type: web
     name: gateway
-    env: JAVA_SPRING_BOOT
     dockerfilePath: ./gateway/Dockerfile
     buildFilter:
       paths:
@@ -54,23 +43,18 @@ services:
     envVars:
       - key: SPRING_PROFILES_ACTIVE
         value: online
-      - key: EUREKA_URI # Apunta al servicio Eureka interno de Render
+      - key: EUREKA_URI
         value: http://eureka-service:8761/eureka
-      - key: JWT_SECRET # Se obtiene de los secretos de Render
-        sync: false # No sincronizar desde el repo, se gestiona en Render
-        fromSecret: jwt_secret_key # Nombre del secreto en Render
-      - key: SPRING_DATA_REDIS_HOST # Apunta al servicio Redis interno de Render
+      - key: JWT_SECRET
+        fromSecret: jwt_secret_key
+      - key: SPRING_DATA_REDIS_HOST
         value: ecopila-redis
       - key: SPRING_DATA_REDIS_PORT
         value: 6379
-    # Puerto público del Gateway
-    ports:
-      - 8090
 
-  # 5. Servicio de Autenticación
+  # 5. Auth Service
   - type: web
     name: auth-service
-    env: JAVA_SPRING_BOOT
     dockerfilePath: ./auth-service/Dockerfile
     buildFilter:
       paths:
@@ -82,10 +66,8 @@ services:
     envVars:
       - key: SPRING_PROFILES_ACTIVE
         value: online
-      - key: JWT_SECRET_KEY # Se obtiene de los secretos de Render
-        sync: false
+      - key: JWT_SECRET_KEY
         fromSecret: jwt_secret_key
-      # Conexión a la base de datos gestionada de Render
       - key: SPRING_DATASOURCE_URL
         fromDatabase:
           name: ecopila-postgres-db
@@ -98,13 +80,10 @@ services:
         fromDatabase:
           name: ecopila-postgres-db
           property: password
-    ports:
-      - 8086
 
-  # 6. Servicio de Producto
+  # 6. Producto Service
   - type: web
     name: producto-service
-    env: JAVA_SPRING_BOOT
     dockerfilePath: ./microservicio_producto/Dockerfile
     buildFilter:
       paths:
@@ -130,13 +109,10 @@ services:
         fromDatabase:
           name: ecopila-postgres-db
           property: password
-    ports:
-      - 8083
 
-  # 7. Servicio de Proveedor
+  # 7. Proveedor Service
   - type: web
     name: proveedor-service
-    env: JAVA_SPRING_BOOT
     dockerfilePath: ./microservicio_proveedor/Dockerfile
     buildFilter:
       paths:
@@ -162,13 +138,10 @@ services:
         fromDatabase:
           name: ecopila-postgres-db
           property: password
-    ports:
-      - 8084
 
-  # 8. Servicio de Tipo de Producto
+  # 8. Tipo Producto Service
   - type: web
     name: tipo-producto-service
-    env: JAVA_SPRING_BOOT
     dockerfilePath: ./microservicio_tipo_producto/Dockerfile
     buildFilter:
       paths:
@@ -194,13 +167,10 @@ services:
         fromDatabase:
           name: ecopila-postgres-db
           property: password
-    ports:
-      - 8085
 
-  # 9. Servicio de Dolar
+  # 9. Dolar Service
   - type: web
     name: dolar-service
-    env: JAVA_SPRING_BOOT
     dockerfilePath: ./microservicio_dolar/Dockerfile
     buildFilter:
       paths:
@@ -226,8 +196,6 @@ services:
         fromDatabase:
           name: ecopila-postgres-db
           property: password
-    ports:
-      - 8082
 
   # 10. SymmetricDS Master
   - type: web
@@ -238,16 +206,11 @@ services:
         - symmetricds/master/**
         - symmetricds/insert_config.sql
         - symmetricds/symmetric-ds-3.14.0/**
-    healthCheckPath: /sync/master # O el endpoint de salud de SymmetricDS
+    healthCheckPath: /sync/master
     plan: free
     envVars:
-      # Render inyecta automáticamente PGHOST, PGPORT, PGDATABASE, PGUSER, PGPASSWORD
-      # para la base de datos vinculada.
-      # RENDER_EXTERNAL_HOSTNAME es el hostname público de este servicio en Render.
-      - key: SYMMETRIC_MASTER_HOST # Usado en master.properties para sync.url
+      - key: SYMMETRIC_MASTER_HOST
         value: ${RENDER_EXTERNAL_HOSTNAME}
-    # El comando usa 'sed' para inyectar las variables de entorno en master.properties
-    # y luego ejecuta el script de inicialización.
     command: >
       sh -c "
         sed -i 's|db.url=.*|db.url=jdbc:postgresql://${PGHOST}:${PGPORT}/${PGDATABASE}?stringtype=unspecified|' /app/symmetric-ds-3.14.0/engines/master.properties &&
@@ -257,6 +220,3 @@ services:
         chmod +x /app/init-symmetric-master.sh &&
         exec /app/init-symmetric-master.sh
       "
-    # Puerto de SymmetricDS para la sincronización con clientes
-    ports:
-      - 31415
