@@ -10,7 +10,7 @@ databases:
     postgresMajorVersion: 14
 
 services:
-  # 2. Servicio Redis (gestionado por Render)
+  # 2. Servicio Redis
   - type: redis
     name: ecopila-redis
     plan: free
@@ -213,7 +213,7 @@ services:
     envVars:
       - key: SYMMETRIC_MASTER_HOST
         value: ${RENDER_EXTERNAL_HOSTNAME}
-    command: >
+    startCommand: >
       sh -c "
         sed -i 's|db.url=.*|db.url=jdbc:postgresql://${PGHOST}:${PGPORT}/${PGDATABASE}?stringtype=unspecified|' /app/symmetric-ds-3.14.0/engines/master.properties &&
         sed -i 's|db.user=.*|db.user=${PGUSER}|' /app/symmetric-ds-3.14.0/engines/master.properties &&
@@ -222,4 +222,5 @@ services:
         chmod +x /app/init-symmetric-master.sh &&
         exec /app/init-symmetric-master.sh
       "
+
 
