@@ -1,6 +1,6 @@
 #!/bin/sh
 # init-symmetric-master.sh (Versión Limpia)
-
+export JAVA_TOOL_OPTIONS="-Djdk.disableLastUsageTracking=true -Djdk.disableContainerSupport=true"
 set -e
 
 # --- Variables ---
