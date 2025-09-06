@@ -55,7 +55,7 @@ services:
     container_name: symmetricds_master
     ports: [ "31415:31415" ]
     environment:
-      JAVA_TOOL_OPTIONS: "-XX:+UseContainerSupport -XX:-UseContainerConstraints"
+      JAVA_TOOL_OPTIONS: "-Djdk.disableLastUsageTracking=true -Djdk.disableContainerSupport=true"
     volumes:
       # ✅ El script, la app y el SQL ya no se montan, ahora son parte de la imagen.
       # Mantenemos solo los volúmenes para datos persistentes y configuración externa.
