@@ -1,9 +1,9 @@
 #!/bin/sh
-# init-symmetric-master.sh (Versión Limpia)
 
+init-symmetric-master.sh (Versión Mejorada)
 set -e
 
-# --- Variables ---
+--- Variables ---
 SYM_ADMIN="/app/symmetric-ds-3.14.0/bin/symadmin"
 DB_SQL="/app/symmetric-ds-3.14.0/bin/dbsql"
 SYM_ENGINE="master"
@@ -13,38 +13,38 @@ PG_USER="admin"
 PG_DB="ecopila_db_online"
 INIT_FLAG_FILE="/app/symmetric-ds-3.14.0/data/.initialized"
 
-# --- Captura los argumentos pasados al script ---
-CMD_ARGS="$@" # Esta línea captura todos los argumentos pasados al script
+Las opciones de la JVM que solucionan el error de Cgroup
+JVM_OPTIONS="-XX:+UnlockDiagnosticVMOptions -XX:-UseContainerSupport -Djava.net.preferIPv4Stack=true"
 
-# --- Iniciar directamente si ya está inicializado ---
+--- Iniciar directamente si ya está inicializado ---
 if [ -f "$INIT_FLAG_FILE" ]; then
-    echo "SymmetricDS Master ya está inicializado. Iniciando servidor..."
-    exec /app/symmetric-ds-3.14.0/bin/sym --port 31415 --server $CMD_ARGS
+echo "SymmetricDS Master ya está inicializado. Iniciando servidor..."
+exec /app/symmetric-ds-3.14.0/bin/sym --port 31415 --server $JVM_OPTIONS
 fi
 
-# --- Esperar a que PostgreSQL esté listo ---
-echo "Esperando a que PostgreSQL en $PG_HOST esté disponible..."
+--- Esperar a que PostgreSQL esté listo ---
+echo "--> Esperando a PostgreSQL en $PG_HOST:5432..."
 export PGPASSWORD=password
 until pg_isready -h "$PG_HOST" -U "$PG_USER" -d "$PG_DB" -q; do
-    echo "PostgreSQL no está listo todavía. Esperando 5 segundos..."
-    sleep 5
+sleep 2
 done
 echo "✅ PostgreSQL está listo."
 
-# --- Inicializar SymmetricDS ---
-echo "Primera ejecución: Creando tablas de SymmetricDS..."
-$SYM_ADMIN --engine "$SYM_ENGINE" create-sym-tables
+--- Inicializar SymmetricDS y crear el esquema ---
+echo "--> Iniciando instancia temporal de SymmetricDS para crear el esquema..."
+$SYM_ADMIN --engine "$SYM_ENGINE" --host $PG_HOST --port 5432 create-sym-tables $JVM_OPTIONS
 
-echo "Insertando configuración desde $CONFIG_SQL_FILE..."
-$DB_SQL --engine "$SYM_ENGINE" < "$CONFIG_SQL_FILE"
+Esperamos un poco para asegurarnos de que el comando se complete
+sleep 15
 
-echo "✅ Configuración de SymmetricDS insertada."
+--- Insertar la configuración ---
+echo "--> Insertando configuración personalizada en la base de datos..."
+$DB_SQL --engine "$SYM_ENGINE" --host $PG_HOST --port 5432 < "$CONFIG_SQL_FILE"
 
-# --- Crear el flag y limpiar ---
-touch "$INIT_FLAG_FILE"
+--- Crear el flag y limpiar ---
 echo "✅ Inicialización completada. Se creó el flag en $INIT_FLAG_FILE."
+touch "$INIT_FLAG_FILE"
 
-echo "Iniciando el servidor SymmetricDS Master..."
-
-# --- Iniciar el servidor ---
-exec /app/symmetric-ds-3.14.0/bin/sym --port 31415 --server $CMD_ARGS
+--- Iniciar el servidor final ---
+echo "--> Iniciando instancia final de SymmetricDS..."
+exec /app/symmetric-ds-3.14.0/bin/sym --port 31415 --server $JVM_OPTIONS
