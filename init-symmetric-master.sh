@@ -13,18 +13,21 @@ PG_USER="admin"
 PG_DB="ecopila_db_online"
 INIT_FLAG_FILE="/app/symmetric-ds-3.14.0/data/.initialized"
 
+# --- Captura los argumentos pasados al script ---
+CMD_ARGS="$@" # Esta línea captura todos los argumentos pasados al script
+
 # --- Iniciar directamente si ya está inicializado ---
 if [ -f "$INIT_FLAG_FILE" ]; then
     echo "SymmetricDS Master ya está inicializado. Iniciando servidor..."
-    exec /app/symmetric-ds-3.14.0/bin/sym --port 31415 --server
+    exec /app/symmetric-ds-3.14.0/bin/sym --port 31415 --server $CMD_ARGS
 fi
 
 # --- Esperar a que PostgreSQL esté listo ---
 echo "Esperando a que PostgreSQL en $PG_HOST esté disponible..."
 export PGPASSWORD=password
 until pg_isready -h "$PG_HOST" -U "$PG_USER" -d "$PG_DB" -q; do
-  echo "PostgreSQL no está listo todavía. Esperando 5 segundos..."
-  sleep 5
+    echo "PostgreSQL no está listo todavía. Esperando 5 segundos..."
+    sleep 5
 done
 echo "✅ PostgreSQL está listo."
 
@@ -44,4 +47,4 @@ echo "✅ Inicialización completada. Se creó el flag en $INIT_FLAG_FILE."
 echo "Iniciando el servidor SymmetricDS Master..."
 
 # --- Iniciar el servidor ---
-exec /app/symmetric-ds-3.14.0/bin/sym --port 31415 --server
+exec /app/symmetric-ds-3.14.0/bin/sym --port 31415 --server $CMD_ARGS
