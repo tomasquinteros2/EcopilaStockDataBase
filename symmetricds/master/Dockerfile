@@ -1,7 +1,7 @@
 # symmetricds/master/Dockerfile
 
 # Utiliza una imagen base de OpenJDK 17
-FROM openjdk:17-jdk-slim
+FROM openjdk:21-jdk-slim
 
 # Instala dependencias necesarias (cliente de postgres y sed)
 RUN apt-get update && apt-get install -y --no-install-recommends \
