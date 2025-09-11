@@ -42,4 +42,4 @@ eureka:
 app:
   offline-mode: true
   dolar:
-    default-price: 1200.0
+    default-price: 1300.0

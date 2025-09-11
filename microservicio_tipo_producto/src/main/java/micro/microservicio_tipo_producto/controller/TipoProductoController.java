@@ -40,6 +40,12 @@ public class TipoProductoController {
         return ResponseEntity.status(HttpStatus.CREATED).body(nuevoTipo);
     }
 
+    @PostMapping("/bulk")
+    public ResponseEntity<List<TipoProducto>> createBulkTiposProducto(@RequestBody List<TipoProducto> tiposProducto) {
+        List<TipoProducto> tiposGuardados = tipoProductoService.saveAll(tiposProducto);
+        return ResponseEntity.status(HttpStatus.CREATED).body(tiposGuardados);
+    }
+
     @PutMapping("/{id}")
     public ResponseEntity<TipoProducto> updateTipoProducto(@PathVariable Long id, @RequestBody TipoProducto tipoProducto) {
         TipoProducto tipoActualizado = tipoProductoService.update(id, tipoProducto);

@@ -14,9 +14,7 @@ import org.springframework.cache.annotation.Caching;
 import org.springframework.stereotype.Service;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
+import java.util.*;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -45,6 +43,43 @@ public class TipoProductoService {
         log.info("Buscando tipo de producto con ID: {}", id);
         return tipoProductoRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Tipo de producto no encontrado con ID: " + id));
+    }
+
+    @Transactional
+    @CacheEvict(value = "tiposProducto", allEntries = true)
+    public List<TipoProducto> saveAll(List<TipoProducto> tiposParaGuardar) {
+        log.info("Iniciando guardado masivo de {} tipos de producto.", tiposParaGuardar.size());
+
+        List<String> nombresAValidar = tiposParaGuardar.stream()
+                .map(TipoProducto::getNombre)
+                .filter(nombre -> nombre != null && !nombre.trim().isEmpty())
+                .map(String::trim)
+                .distinct()
+                .collect(Collectors.toList());
+
+        if (nombresAValidar.isEmpty()) {
+            log.warn("La lista para guardado masivo está vacía o no contiene nombres válidos.");
+            return new ArrayList<>();
+        }
+
+        Set<String> nombresExistentes = tipoProductoRepository.findByNombreIn(nombresAValidar).stream()
+                .map(TipoProducto::getNombre)
+                .collect(Collectors.toSet());
+
+        List<TipoProducto> tiposRealmenteNuevos = tiposParaGuardar.stream()
+                .filter(tipo -> {
+                    String nombre = tipo.getNombre() != null ? tipo.getNombre().trim() : "";
+                    return !nombre.isEmpty() && !nombresExistentes.contains(nombre);
+                })
+                .collect(Collectors.toList());
+
+        if (tiposRealmenteNuevos.isEmpty()) {
+            log.info("No se encontraron nuevos tipos de producto para guardar. Todos los proporcionados ya existen o son inválidos.");
+            return new ArrayList<>();
+        }
+
+        log.info("Guardando {} nuevos tipos de producto.", tiposRealmenteNuevos.size());
+        return tipoProductoRepository.saveAll(tiposRealmenteNuevos);
     }
 
     @CacheEvict(value = "tiposProducto", allEntries = true)

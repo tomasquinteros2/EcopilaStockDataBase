@@ -56,28 +56,31 @@ public class DolarService {
     @Transactional
     public void init() {
         if (dolarRepository.count() == 0) {
-            log.info("No hay registro de Dólar en la base de datos. Creando uno inicial...");
+            log.info("Base de datos de Dólar vacía. Intentando inicializar valor...");
+
+            Optional<BigDecimal> precioApiOpt = obtenerPrecioDolarDeApi();
+
             BigDecimal initialPrice;
             String initialName;
 
-            if (offlineMode) {
-                // MODO OFFLINE: Arranca con el valor por defecto. Esperará la sincronización para el valor real.
-                initialPrice = new BigDecimal(defaultPriceStr);
-                initialName = "Dólar Oficial (Offline)";
-                log.info("Modo OFFLINE: Precio inicial establecido por defecto: {}. Esperando sincronización.", initialPrice);
-            } else {
-                // MODO ONLINE: Intenta obtener el precio real de la API al arrancar.
-                initialPrice = obtenerPrecioDolarDeApi()
-                        .map(this::redondearPrecioDolar) //
-                        .orElse(new BigDecimal(defaultPriceStr));
+            if (precioApiOpt.isPresent()) {
+                initialPrice = redondearPrecioDolar(precioApiOpt.get());
                 initialName = "Dólar Oficial";
-                log.info("Modo ONLINE: Precio inicial obtenido de la API (o por defecto si falla): {}", initialPrice);
+                log.info("Valor inicial obtenido de la API: {}", initialPrice);
+            } else {
+                initialPrice = new BigDecimal(defaultPriceStr);
+                initialName = "Dólar Oficial (Valor por Defecto)";
+                log.warn("No se pudo obtener el valor de la API al arrancar. Usando valor por defecto: {}", initialPrice);
             }
 
             Dolar dolar = new Dolar();
             dolar.setNombre(initialName);
             dolar.setPrecio(initialPrice);
             dolarRepository.save(dolar);
+            log.info("Registro de Dólar inicial creado: {}", dolar);
+        } else {
+            // Si ya hay datos, no hacemos nada. Se usará el último valor guardado.
+            log.info("Ya existe un registro de Dólar en la base de datos. No se requiere inicialización.");
         }
     }
 
