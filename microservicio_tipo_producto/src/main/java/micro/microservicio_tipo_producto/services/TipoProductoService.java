@@ -134,4 +134,21 @@ public class TipoProductoService {
         tipoProductoRepository.deleteById(id);
         log.info("Tipo de producto con ID {} eliminado correctamente.", id);
     }
+    public void validarExistencia(List<Long> ids) {
+        if (ids == null || ids.isEmpty()) {
+            return;
+        }
+        Set<Long> uniqueIds = new HashSet<>(ids);
+        List<TipoProducto> foundTipos = tipoProductoRepository.findAllById(uniqueIds);
+
+        if (foundTipos.size() < uniqueIds.size()) {
+            Set<Long> foundIds = foundTipos.stream()
+                    .map(TipoProducto::getId)
+                    .collect(Collectors.toSet());
+            uniqueIds.removeAll(foundIds);
+
+            throw new ResourceNotFoundException("No se encontraron los siguientes IDs de tipo de producto: " + uniqueIds);
+        }
+        log.info("Todos los {} IDs de tipos de producto fueron validados exitosamente.", uniqueIds.size());
+    }
 }

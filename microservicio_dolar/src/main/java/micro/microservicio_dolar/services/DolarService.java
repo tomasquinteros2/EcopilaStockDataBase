@@ -176,8 +176,8 @@ public class DolarService {
 
     @Scheduled(cron = "0 30 * * * *")
     public void actualizarPrecioDolar() {
-        if (!isOnline() || offlineMode || !updateEnabled) {
-            log.info("La actualización del dólar se omitirá. Online: {}, OfflineMode: {}, UpdateEnabled: {}", isOnline(), offlineMode, updateEnabled);
+        if (!isOnline()) {
+            log.info("La actualización del dólar se omitirá. Online: {}, OfflineMode: {}, UpdateEnabled: {}", isOnline());
             return;
         }
 
@@ -203,7 +203,6 @@ public class DolarService {
     }
 
     /**
-     * MÉTODO HELPER
      * Redondea el precio del dólar hacia abajo al múltiplo de 50 más cercano.
      * Ej: 1310 -> 1300, 1349 -> 1300, 1350 -> 1350, 1399 -> 1350.
      * @param precioOriginal El precio obtenido de la API.
@@ -213,7 +212,7 @@ public class DolarService {
         if (precioOriginal == null) {
             return null;
         }
-        BigDecimal divisor = new BigDecimal("50");
+        BigDecimal divisor = new BigDecimal("25");
         BigDecimal resultadoDivision = precioOriginal.divide(divisor, 0, RoundingMode.FLOOR);
         return resultadoDivision.multiply(divisor);
     }

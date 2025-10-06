@@ -1,6 +1,7 @@
 package micro.microservicio_proveedor.controller;
 
 import micro.microservicio_proveedor.entities.Proveedor;
+import micro.microservicio_proveedor.entities.dto.ProveedorResponseDTO;
 import micro.microservicio_proveedor.services.ProveedorService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -24,8 +25,8 @@ public class ProveedorController {
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<Proveedor> getById(@PathVariable Long id) {
-        return ResponseEntity.ok(proveedorService.findById(id));
+    public ResponseEntity<ProveedorResponseDTO> getProveedor(@PathVariable Long id) {
+        return ResponseEntity.ok(proveedorService.findDtoById(id));
     }
 
     @PostMapping("")
@@ -44,5 +45,10 @@ public class ProveedorController {
     public ResponseEntity<Void> delete(@PathVariable Long id) {
         proveedorService.delete(id);
         return ResponseEntity.noContent().build();
+    }
+    @PostMapping("/validar")
+    public ResponseEntity<Void> validarProveedores(@RequestBody List<Long> ids) {
+        proveedorService.validarExistencia(ids);
+        return ResponseEntity.ok().build();
     }
 }

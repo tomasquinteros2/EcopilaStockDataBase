@@ -57,4 +57,9 @@ public class TipoProductoController {
         tipoProductoService.delete(id);
         return ResponseEntity.noContent().build();
     }
+    @PostMapping("/validar")
+    public ResponseEntity<Void> validarTiposProducto(@RequestBody List<Long> ids) {
+        tipoProductoService.validarExistencia(ids);
+        return ResponseEntity.ok().build();
+    }
 }

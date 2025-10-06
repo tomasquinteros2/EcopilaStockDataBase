@@ -33,11 +33,11 @@ public class Producto {
     @SequenceGenerator(
             name = "producto_seq",
             sequenceName = "producto_id_seq",
-            allocationSize = 1
+            allocationSize = 50
     )
     private Long id;
 
-    @Column(nullable = true, unique = true)
+    @Column(nullable = true)
     private String codigo_producto;
 
     @Column
@@ -46,7 +46,6 @@ public class Producto {
     @Column
     private int cantidad;
 
-    // --- CAMPOS MONETARIOS CON BIGDECIMAL ---
     @Column(precision = 19, scale = 4)
     private BigDecimal iva;
 
@@ -73,7 +72,6 @@ public class Producto {
 
     @Column(precision = 19, scale = 4)
     private BigDecimal precio_sin_iva;
-    // --- FIN CAMPOS MONETARIOS --- //
 
     @Column(nullable = false)
     @ColumnDefault("false")
@@ -88,7 +86,7 @@ public class Producto {
     @Column
     private Long tipoProductoId;
 
-    @ManyToMany(cascade = {CascadeType.PERSIST, CascadeType.MERGE})
+    @ManyToMany(fetch = FetchType.LAZY, cascade = {CascadeType.PERSIST, CascadeType.MERGE})
     @JoinTable(
             name = "productos_relacionados",
             joinColumns = @JoinColumn(name = "producto_id"),
@@ -105,8 +103,6 @@ public class Producto {
     @PrePersist
     public void generarCodigoSiNulo() {
         if (this.codigo_producto == null || this.codigo_producto.trim().isEmpty()) {
-            // Genera un código único usando un prefijo y los primeros 8 caracteres de un UUID.
-            // Ejemplo de resultado: "PROD-550E8400"
             this.codigo_producto = "PROD-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
         }
     }

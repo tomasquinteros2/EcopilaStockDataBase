@@ -1,13 +1,15 @@
-package micro.microservicio_producto.entities.DTO;
+package micro.microservicio_proveedor.entities.dto;
 
+import lombok.Builder;
 import lombok.Data;
 
+import java.io.Serializable;
 import java.math.BigDecimal;
 import java.util.List;
 
 @Data
-public class ProveedorDTO {
-
+@Builder
+public class ProveedorResponseDTO implements Serializable {
     private Long id;
     private String nombre;
     private String cuit;
@@ -23,6 +25,7 @@ public class ProveedorDTO {
     private String telefonoTransporte;
     private String paginaWeb;
     private String usuarioPagina;
+    private String contrasenaPagina;
     private String responsableVentas1;
     private String responsableVentas2;
     private String condicionVenta;
@@ -30,4 +33,5 @@ public class ProveedorDTO {
     private String tipoCotizacion;
     private BigDecimal valorCotizacionManual;
     private String observaciones;
+    private List<RazonSocialDTO> razonesSociales;
 }

@@ -5,6 +5,8 @@ import org.springframework.data.jpa.domain.Specification;
 import org.springframework.data.jpa.repository.*;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 
 import java.util.List;
 import java.util.Optional;
@@ -13,50 +15,40 @@ import java.util.stream.Stream;
 @Repository
 public interface ProductoRepository extends JpaRepository<Producto, Long> , JpaSpecificationExecutor<Producto> {
 
-    // --- MÉTODOS DE BÚSQUEDA CON CARGA EAGER DE RELACIONES ---
-
-    /**
-     * Sobrescribe el método base para asegurar la carga de relaciones.
-     */
+    
     @Override
     @EntityGraph(attributePaths = {"productosRelacionados"})
     Optional<Producto> findById(Long id);
 
-    /**
-     * Sobrescribe el método base para asegurar la carga de relaciones.
-     */
+
     @Override
-    @EntityGraph(attributePaths = {"productosRelacionados"})
     List<Producto> findAll();
 
     @Query("SELECT p FROM Producto p")
     Stream<Producto> findAllAsStream();
 
-    /**
-     * Sobrescribe el método base para asegurar la carga de relaciones al usar especificaciones.
-     */
     @Override
-    @EntityGraph(attributePaths = {"productosRelacionados"})
     List<Producto> findAll(Specification<Producto> spec);
+
+    @Override
+    Page<Producto> findAll(Specification<Producto> spec,Pageable pageable);
+
 
     /**
      * Busca productos por descripción, cargando sus relaciones.
      */
     @Query("SELECT p FROM Producto p WHERE LOWER(p.descripcion) LIKE LOWER(CONCAT('%', :desc, '%'))")
-    @EntityGraph(attributePaths = {"productosRelacionados"})
     Optional<List<Producto>> findByDesc(@Param("desc") String desc);
 
     /**
      * Busca un producto por su código único, cargando sus relaciones.
      */
     @Query("SELECT p FROM Producto p WHERE p.codigo_producto = :codigoProducto")
-    @EntityGraph(attributePaths = {"productosRelacionados"})
     Optional<Producto> findByCodigo_producto(@Param("codigoProducto") String codigoProducto);
 
     /**
      * Busca productos por el ID de su tipo, cargando sus relaciones.
      */
-    @EntityGraph(attributePaths = {"productosRelacionados"})
     Optional<List<Producto>> findByTipoProductoId(Long id);
 
     long countByCostoFijoIsFalse();
@@ -64,7 +56,11 @@ public interface ProductoRepository extends JpaRepository<Producto, Long> , JpaS
     @Query("SELECT p FROM Producto p WHERE p.codigo_producto IN :codigos")
     List<Producto> findAllByCodigo_productoIn(@Param("codigos") List<String> codigos);
 
-    // --- MÉTODOS DE MODIFICACIÓN (NO REQUIEREN @EntityGraph) ---
+    @Query(value = "SELECT producto_relacionado_id FROM productos_relacionados WHERE producto_id = :productoId", nativeQuery = true)
+    List<Long> findProductosRelacionadosIdsByProductoId(@Param("productoId") Long productoId);
+
+    @Query(value = "SELECT producto_id, producto_relacionado_id FROM productos_relacionados WHERE producto_id IN :productoIds", nativeQuery = true)
+    List<Object[]> findRelacionadosIdsByProductoIds(@Param("productoIds") List<Long> productoIds);
 
     @Modifying
     @Query(value = "DELETE FROM \"productos_relacionados\" WHERE \"producto_id\" = :productoId OR \"producto_relacionado_id\" = :productoId", nativeQuery = true)
@@ -73,4 +69,10 @@ public interface ProductoRepository extends JpaRepository<Producto, Long> , JpaS
     @Modifying
     @Query(value = "UPDATE Producto p SET p.cantidad = p.cantidad - :cantidad WHERE p.id = :id")
     int descontar(@Param("id") Long id, @Param("cantidad") Integer cantidad);
+
+    @Modifying
+    @Query(value = "DELETE FROM \"productos_relacionados\" WHERE \"producto_id\" IN :ids OR \"producto_relacionado_id\" IN :ids", nativeQuery = true)
+    void eliminarRelacionesEnBloque(List<Long> ids);
+
+    List<Producto> findAllByCostoFijoIsFalse();
 }

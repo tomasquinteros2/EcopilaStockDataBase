@@ -2,6 +2,7 @@ package micro.microservicio_producto.controllers;
 
 import jakarta.servlet.http.HttpServletRequest;
 import micro.microservicio_producto.entities.DTO.ProductoDTO;
+import micro.microservicio_producto.entities.DTO.ProductoPageDTO;
 import micro.microservicio_producto.entities.DTO.ProductoRelacionadoDTO;
 import micro.microservicio_producto.entities.DTO.ProductoRelacionadoResultadoDTO;
 import micro.microservicio_producto.entities.Producto;
@@ -13,7 +14,9 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.web.PageableDefault;
 import java.util.List;
 
 @RestController
@@ -29,32 +32,38 @@ public class ProductoController {
     }
 
     @GetMapping("")
-    public List<Producto> getAll(
-            @RequestParam(required = false) String search,
+    public ResponseEntity<Page<ProductoPageDTO>> getAll(
+            @RequestParam(required = false) Long id,
+            @RequestParam(required = false) String codigo_producto,
+            @RequestParam(required = false) String descripcion,
             @RequestParam(required = false) Long proveedorId,
-            @RequestParam(required = false) Long tipoId
+            @RequestParam(required = false) Long tipoId,
+            @PageableDefault(size = 20, sort = "id") Pageable pageable
     ) {
-
-        return productoService.findAllFiltered(search, proveedorId, tipoId);
+        Page<ProductoPageDTO> paginaDeProductos = productoService.findAllPaginatedAndFiltered(
+                id, codigo_producto, descripcion, proveedorId, tipoId, pageable
+        );
+        return ResponseEntity.ok(paginaDeProductos);
     }
+
     @GetMapping("/byDesc/{desc}")
-    public ResponseEntity<List<Producto>> getProductosByDesc(@PathVariable String desc) { // CAMBIO: Eliminar 'throws Exception'
+    public ResponseEntity<List<Producto>> getProductosByDesc(@PathVariable String desc) {
         List<Producto> resultado = productoService.findByDesc(desc);
         return ResponseEntity.ok(resultado);
     }
     @GetMapping("/{id}")
-    public ResponseEntity<Producto> getProductoById(@PathVariable Long id) { // CAMBIO: Eliminar 'throws Exception'
+    public ResponseEntity<Producto> getProductoById(@PathVariable Long id) {
         Producto producto = productoService.findById(id);
         return ResponseEntity.ok(producto);
     }
     @GetMapping("/bytipo-producto/{id}")
-    public ResponseEntity<List<Producto>> getProductoByTipoProducto(@PathVariable Long id) { // CAMBIO: Eliminar 'throws Exception'
-        List<Producto> resultado = productoService.findByTipoProducto(id); // Antes: findByTipoProducto
+    public ResponseEntity<List<Producto>> getProductoByTipoProducto(@PathVariable Long id) {
+        List<Producto> resultado = productoService.findByTipoProducto(id);
         return ResponseEntity.ok(resultado);
     }
 
     @PostMapping("")
-    public ResponseEntity<Producto> createProducto(@RequestBody Producto entity) { // CAMBIO: Eliminar 'throws Exception'
+    public ResponseEntity<Producto> createProducto(@RequestBody Producto entity) {
         Producto nuevoProducto = productoService.save(entity);
         return ResponseEntity.status(HttpStatus.CREATED).body(nuevoProducto);
     }
@@ -80,6 +89,15 @@ public class ProductoController {
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> deleteProducto(@PathVariable Long id) {
         productoService.delete(id);
+        return ResponseEntity.noContent().build();
+    }
+    @DeleteMapping("/delete-multiple")
+    public ResponseEntity<Void> deleteMultipleProductos(@RequestBody List<Long> ids) {
+        if(ids == null || ids.isEmpty()) {
+            log.info("Lista de IDs para eliminación múltiple está vacía o es nula.");
+            return ResponseEntity.badRequest().build();
+        }
+        productoService.deleteMultiple(ids);
         return ResponseEntity.noContent().build();
     }
     @PutMapping("/descontar")
