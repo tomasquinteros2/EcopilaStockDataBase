@@ -1,31 +1,26 @@
-# Etapa 1: Construcción con Maven
-FROM maven:3.9.6-eclipse-temurin-17 AS build
+ARG JAVA_VERSION=17
+ARG MODULE=gateway
+ARG PORT=8090
+
+FROM maven:3.9.9-eclipse-temurin-${JAVA_VERSION} AS build
+ARG MODULE
 WORKDIR /app
 
-# --- LA PARTE CLAVE ESTÁ AQUÍ ---
-# 1. Copia el pom.xml PADRE. Maven ahora sabe que esto es un multi-módulo.
 COPY pom.xml .
+COPY ${MODULE}/pom.xml ./${MODULE}/
+RUN mvn -q -B -f ./${MODULE}/pom.xml dependency:go-offline
 
-# 2. Copia el pom.xml del MÓDULO específico.
-COPY gateway/pom.xml ./gateway/
+COPY ${MODULE}/src ./${MODULE}/src
+RUN mvn -q -B -f ./${MODULE}/pom.xml clean package -DskipTests
 
-# 3. Descarga dependencias. Esta capa se cachea y solo se ejecuta si los POMs cambian.
-#    Usa el POM del módulo para que solo descargue lo que 'gateway' necesita.
-RUN mvn -B -f gateway/pom.xml dependency:go-offline
-
-# 4. AHORA SÍ, copia solo el código fuente del módulo que estás construyendo.
-COPY gateway/src ./gateway/src
-# --- FIN DE LA PARTE CLAVE ---
-
-# 4. Compilar la aplicación
-RUN mvn -B -f gateway/pom.xml clean package -DskipTests
-
-# Etapa 2: Imagen final de ejecución
-FROM eclipse-temurin:17-jre-jammy
+FROM eclipse-temurin:${JAVA_VERSION}-jre-jammy AS runtime
+ARG MODULE
+ARG PORT
 WORKDIR /app
 
-# Copia únicamente el JAR compilado
-COPY --from=build /app/gateway/target/gateway-*.jar app.jar
+ENV JAVA_TOOL_OPTIONS="-XX:+UseSerialGC -Xms128m -Xmx256m -XX:MaxMetaspaceSize=96m -XX:MaxDirectMemorySize=64m -XX:+ExitOnOutOfMemoryError -Dspring.main.lazy-initialization=true -Dreactor.netty.ioWorkerCount=2 -Dserver.port=\${PORT:8090}"
 
-EXPOSE 8090
-ENTRYPOINT ["java", "-jar", "app.jar"]
+COPY --from=build /app/${MODULE}/target/*.jar /app/app.jar
+
+EXPOSE ${PORT}
+ENTRYPOINT [ "sh", "-c", "java $JAVA_TOOL_OPTIONS -jar /app/app.jar" ]

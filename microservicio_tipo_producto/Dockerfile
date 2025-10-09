@@ -1,26 +1,34 @@
-# Etapa 1: Construcción con Maven
-FROM maven:3.9.6-eclipse-temurin-17 AS build
-WORKDIR /app
+ARG JAVA_VERSION=17
+ARG MODULE=microservicio_tipo_producto
+ARG PORT=8085
 
-# 1. Copiar solo los POMs para descargar dependencias
+FROM maven:3.9.9-eclipse-temurin-${JAVA_VERSION} AS build
+ARG MODULE
+WORKDIR /app
 COPY pom.xml .
-COPY microservicio_tipo_producto/pom.xml ./microservicio_tipo_producto/
+COPY ${MODULE}/pom.xml ./${MODULE}/
+RUN mvn -q -B -f ./${MODULE}/pom.xml dependency:go-offline
+COPY ${MODULE}/src ./${MODULE}/src
+RUN mvn -q -B -f ./${MODULE}/pom.xml clean package -DskipTests
 
-# 2. Descargar dependencias (Capa cacheable)
-RUN mvn -B -f microservicio_tipo_producto/pom.xml dependency:go-offline
-
-# 3. Copiar el resto del código fuente
-COPY . .
-
-# 4. Compilar la aplicación
-RUN mvn -B -f microservicio_tipo_producto/pom.xml clean package -DskipTests
-
-# Etapa 2: Imagen final de ejecución
-FROM eclipse-temurin:17-jre-jammy
+FROM eclipse-temurin:${JAVA_VERSION}-jre-alpine AS runtime
+ARG MODULE
+ARG PORT
 WORKDIR /app
-
-# Copia únicamente el JAR compilado
-COPY --from=build /app/microservicio_tipo_producto/target/microservicio_tipo_producto-*.jar app.jar
-
-EXPOSE 8085
-ENTRYPOINT ["java", "-jar", "app.jar"]
+ENV JAVA_TOOL_OPTIONS="\
+-XX:+UseSerialGC \
+-XX:+ClassUnloading \
+-XX:ActiveProcessorCount=1 \
+-XX:ThreadStackSize=512k \
+-Xms96m -Xmx168m \
+-XX:MaxMetaspaceSize=96m \
+-XX:ReservedCodeCacheSize=40m \
+-XX:MaxDirectMemorySize=24m \
+-XX:+ExitOnOutOfMemoryError \
+-Dspring.main.lazy-initialization=true \
+-Dserver.tomcat.threads.max=16 \
+-Dserver.port=\${PORT:8085} \
+"
+COPY --from=build /app/${MODULE}/target/*-SNAPSHOT.jar /app/app.jar
+EXPOSE ${PORT}
+ENTRYPOINT ["sh","-c","java $JAVA_TOOL_OPTIONS -jar /app/app.jar"]

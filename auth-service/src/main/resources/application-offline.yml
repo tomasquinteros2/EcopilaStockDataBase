@@ -7,7 +7,9 @@ spring:
     url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://postgres-db-offline:5432/ecopila_db_offline}
     username: ${SPRING_DATASOURCE_USERNAME:admin}
     password: ${SPRING_DATASOURCE_PASSWORD:password}
-
+    hikari:
+      maximum-pool-size: 5
+      minimum-idle: 1
   cloud:
     config:
       enabled: false
@@ -16,3 +18,7 @@ spring:
   eureka:
     client:
       enabled: false
+server:
+  tomcat:
+    threads:
+      max: 25

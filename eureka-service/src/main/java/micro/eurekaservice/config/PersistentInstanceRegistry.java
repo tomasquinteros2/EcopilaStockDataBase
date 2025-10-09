@@ -1,6 +1,10 @@
 package micro.eurekaservice.config;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.netflix.appinfo.ApplicationInfoManager;
 import com.netflix.appinfo.DataCenterInfo;
@@ -20,6 +24,11 @@ import org.springframework.cloud.netflix.eureka.server.InstanceRegistry;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -94,10 +103,8 @@ public class PersistentInstanceRegistry extends InstanceRegistry {
                                     new Data(
                                             instance.getAppName(),
                                             instance.getHostName(),
-                                            instance.getIPAddr(),
                                             instance.getPort(),
-                                            instance.getStatus(),
-                                            instance.getDataCenterInfo() != null ? instance.getDataCenterInfo().getName() : DataCenterInfo.Name.MyOwn
+                                            instance.getStatus() != null ? instance.getStatus().name() : null
                                     )
                             );
                         }
@@ -111,65 +118,56 @@ public class PersistentInstanceRegistry extends InstanceRegistry {
     }
 
     private void loadFromFile() {
-        File file = new File(CACHE_FILE_PATH);
-        if (file.exists() && file.length() > 0) {
+        Path cache = Paths.get("/data/eureka_cache.json");
+        if (!Files.exists(cache)) {
+            return;
+        }
+        try (InputStream in = Files.newInputStream(cache)) {
+            ObjectMapper mapper = new ObjectMapper()
+                    .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
+            Map<String, Data> stored = mapper.readValue(in, new TypeReference<Map<String, Data>>() {});
+            // TODO: integra 'stored' en tu estructura interna (p.ej. this.registry.putAll(stored))
+            logger.info("Cargadas {} instancias desde caché persistente.", stored.size());
+        } catch (Exception ex) {
+            logger.error("Error cargando instancias desde {}. Se renombrará como .corrupt", cache, ex);
             try {
-                Map<String, Data> registryMap = objectMapper.readValue(
-                        file,
-                        new TypeReference<Map<String, Data>>() {});
-
-                logger.info("Loading {} instances from cache file: {}", registryMap.size(), CACHE_FILE_PATH);
-
-                for (Map.Entry<String, Data> entry : registryMap.entrySet()) {
-                    Data data = entry.getValue();
-                    InstanceInfo.Builder builder = InstanceInfo.Builder.newBuilder()
-                            .setInstanceId(entry.getKey())
-                            .setAppName(data.getAppName())
-                            .setHostName(data.getHostName())
-                            .setIPAddr(data.getIpAddr())
-                            .setPort(data.getPort())
-                            .setStatus(data.getStatus() != null ? data.getStatus() : InstanceInfo.InstanceStatus.UP);
-
-                    final DataCenterInfo.Name loadedName = data.getDataCenterName();
-                    builder.setDataCenterInfo(new DataCenterInfo() {
-                        @Override
-                        public Name getName() {
-                            return loadedName != null ? loadedName : DataCenterInfo.Name.MyOwn;
-                        }
-                    });
-
-
-                    LeaseInfo leaseInfo = LeaseInfo.Builder.newBuilder() // Acceso directo a LeaseInfo.Builder
-                            .setRenewalIntervalInSecs(30) // Valores
-                            .setDurationInSecs(90)        // Valores
-                            .build();
-                    builder.setLeaseInfo(leaseInfo); // El método setLeaseInfo en InstanceInfo.Builder espera un com.netflix.appinfo.LeaseInfo
-
-                    // Estos métodos deberían estar bien si eureka-client es 2.0.x
-                    builder.setHomePageUrl("/info", null); // (relativeUrl, explicitUrl)
-                    builder.setStatusPageUrl("/health", null); // (relativeUrl, explicitUrl)
-                    builder.setHealthCheckUrls("/health", null, null); // (relativeUrl, explicitUrl, secureExplicitUrl)
-
-                    InstanceInfo instanceToRegister = builder.build();
-                    super.register(instanceToRegister, true);
-                    logger.debug("Loaded and registered instance from cache: {}", instanceToRegister.getInstanceId());
-                }
-            } catch (IOException e) {
-                logger.error("Error loading instances from cache file: {}", CACHE_FILE_PATH, e);
+                Files.move(cache,
+                        cache.resolveSibling("eureka_cache.json.corrupt"),
+                        StandardCopyOption.REPLACE_EXISTING);
+            } catch (Exception ignore) {
+                logger.warn("No se pudo renombrar el archivo de caché corrupto: {}", cache);
             }
-        } else {
-            logger.info("Cache file not found or is empty, no instances loaded: {}", CACHE_FILE_PATH);
         }
     }
 
-    @Getter
-    @AllArgsConstructor
-    private static class Data {
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public static class Data {
         private String appName;
         private String hostName;
-        private String ipAddr;
-        private int port;
-        private InstanceInfo.InstanceStatus status;
-        private DataCenterInfo.Name dataCenterName;
+        private Integer port;
+        private String status;
+
+        public Data() {
+        }
+
+        @JsonCreator
+        public Data(@JsonProperty("appName") String appName,
+                    @JsonProperty("hostName") String hostName,
+                    @JsonProperty("port") Integer port,
+                    @JsonProperty("status") String status) {
+            this.appName = appName;
+            this.hostName = hostName;
+            this.port = port;
+            this.status = status;
+        }
+
+        public String getAppName() { return appName; }
+        public void setAppName(String appName) { this.appName = appName; }
+        public String getHostName() { return hostName; }
+        public void setHostName(String hostName) { this.hostName = hostName; }
+        public Integer getPort() { return port; }
+        public void setPort(Integer port) { this.port = port; }
+        public String getStatus() { return status; }
+        public void setStatus(String status) { this.status = status; }
     }
 }
