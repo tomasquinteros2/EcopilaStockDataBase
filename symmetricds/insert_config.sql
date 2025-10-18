@@ -82,3 +82,10 @@ INSERT INTO sym_trigger_router (trigger_id, router_id, initial_load_order, last_
 INSERT INTO sym_parameter (external_id, node_group_id, param_key, param_value, create_time, last_update_time)
 VALUES ('ALL', 'master_group', 'db.quote.numbers.in.where.enabled', 'false', now(), now())
     ON CONFLICT (external_id, node_group_id, param_key) DO NOTHING;
+
+INSERT INTO sym_column (trigger_id, column_name, pk, updateable, included, create_time, last_update_time)
+VALUES
+    ('usuario_trigger', 'totp_secret', 0, 1, 1, now(), now()),
+    ('usuario_trigger', 'two_factor_enabled', 0, 1, 1, now(), now()),
+    ('usuario_trigger', 'account_verified', 0, 1, 1, now(), now())
+    ON CONFLICT (trigger_id, column_name) DO NOTHING;
