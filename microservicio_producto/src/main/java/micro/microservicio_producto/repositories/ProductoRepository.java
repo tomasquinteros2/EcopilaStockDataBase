@@ -43,9 +43,11 @@ public interface ProductoRepository extends JpaRepository<Producto, Long> , JpaS
     /**
      * Busca un producto por su código único, cargando sus relaciones.
      */
-    @Query("SELECT p FROM Producto p WHERE p.codigo_producto = :codigoProducto")
-    Optional<Producto> findByCodigo_producto(@Param("codigoProducto") String codigoProducto);
+    @Query("SELECT p FROM Producto p WHERE p.codigoProducto = :codigoProducto")
+    List<Producto> findByCodigoProducto(@Param("codigoProducto") String codigoProducto);
 
+    @Query("SELECT p FROM Producto p WHERE p.codigoProducto = :codigo AND p.proveedorId = :proveedorId")
+    Optional<Producto> findByCodigoProductoAndProveedorId(@Param("codigo") String codigo, @Param("proveedorId") Long proveedorId);
     /**
      * Busca productos por el ID de su tipo, cargando sus relaciones.
      */
@@ -53,8 +55,8 @@ public interface ProductoRepository extends JpaRepository<Producto, Long> , JpaS
 
     long countByCostoFijoIsFalse();
 
-    @Query("SELECT p FROM Producto p WHERE p.codigo_producto IN :codigos")
-    List<Producto> findAllByCodigo_productoIn(@Param("codigos") List<String> codigos);
+    @Query("SELECT p FROM Producto p WHERE p.codigoProducto IN :codigos")
+    List<Producto> findAllByCodigoProductoIn(@Param("codigos") List<String> codigos);
 
     @Query(value = "SELECT producto_relacionado_id FROM productos_relacionados WHERE producto_id = :productoId", nativeQuery = true)
     List<Long> findProductosRelacionadosIdsByProductoId(@Param("productoId") Long productoId);

@@ -34,14 +34,16 @@ public class ProductoController {
     @GetMapping("")
     public ResponseEntity<Page<ProductoPageDTO>> getAll(
             @RequestParam(required = false) Long id,
-            @RequestParam(required = false) String codigo_producto,
+            @RequestParam(required = false) String codigoProducto,
             @RequestParam(required = false) String descripcion,
             @RequestParam(required = false) Long proveedorId,
             @RequestParam(required = false) Long tipoId,
             @PageableDefault(size = 20, sort = "id") Pageable pageable
     ) {
+        log.info("Recibiendo solicitud para obtener productos con filtros - id: {}, codigo_producto: {}, descripcion: {}, proveedorId: {}, tipoId: {}, pageable: {}",
+                id, codigoProducto, descripcion, proveedorId, tipoId, pageable);
         Page<ProductoPageDTO> paginaDeProductos = productoService.findAllPaginatedAndFiltered(
-                id, codigo_producto, descripcion, proveedorId, tipoId, pageable
+                id, codigoProducto, descripcion, proveedorId, tipoId, pageable
         );
         return ResponseEntity.ok(paginaDeProductos);
     }
@@ -88,6 +90,7 @@ public class ProductoController {
 
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> deleteProducto(@PathVariable Long id) {
+        log.info("Eliminando producto con ID: {}", id);
         productoService.delete(id);
         return ResponseEntity.noContent().build();
     }
@@ -97,6 +100,7 @@ public class ProductoController {
             log.info("Lista de IDs para eliminación múltiple está vacía o es nula.");
             return ResponseEntity.badRequest().build();
         }
+        log.info("Eliminando múltiples productos con IDs: {}", ids);
         productoService.deleteMultiple(ids);
         return ResponseEntity.noContent().build();
     }
@@ -113,6 +117,7 @@ public class ProductoController {
     }
     @DeleteMapping("/relaciones")
     public ResponseEntity<Void> eliminarRelacion(@RequestBody ProductoRelacionadoDTO dto) {
+        log.info("Eliminando relación entre producto ID {} y producto ID {}", dto.getProductoId(), dto.getProductoRelacionadoId());
         productoService.eliminarRelacion(dto);
         return ResponseEntity.noContent().build();
     }

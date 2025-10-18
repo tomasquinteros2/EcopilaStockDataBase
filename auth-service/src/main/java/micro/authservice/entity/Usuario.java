@@ -48,6 +48,14 @@ public class Usuario implements Serializable {
             inverseJoinColumns = {@JoinColumn(name = "authority_name", referencedColumnName = "name")}
     )
     private Set<Authority> authorities = new HashSet<>();
+    @Column(name = "totp_secret")
+    private String totpSecret;
+
+    @Column(name = "two_factor_enabled")
+    private boolean twoFactorEnabled = false;
+
+    @Column(name = "account_verified")
+    private boolean accountVerified = false;
 
     public Usuario(String username, String password, Set<Authority> authorities) {
         this.username = username.toLowerCase();

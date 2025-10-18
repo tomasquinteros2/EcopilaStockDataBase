@@ -81,7 +81,7 @@ public class SecurityConfig {
                 )
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/auth/login").permitAll()
-                        .requestMatchers(HttpMethod.POST, "/auth/register").permitAll() // Permitir registro de usuarios
+                        .requestMatchers(HttpMethod.POST, "/auth/register/**").permitAll() // Permitir registro de usuarios
                         .requestMatchers("/actuator/**").permitAll() // Permitir acceso a Actuator
                         .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll() // Swagger
                         .anyRequest().authenticated() // Todas las demás peticiones requieren autenticación

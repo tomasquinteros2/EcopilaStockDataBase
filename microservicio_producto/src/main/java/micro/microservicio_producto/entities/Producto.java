@@ -37,8 +37,8 @@ public class Producto {
     )
     private Long id;
 
-    @Column(nullable = true)
-    private String codigo_producto;
+    @Column(name = "codigo_producto",nullable = true, unique = false)
+    private String codigoProducto;
 
     @Column
     private String descripcion;
@@ -102,8 +102,8 @@ public class Producto {
 
     @PrePersist
     public void generarCodigoSiNulo() {
-        if (this.codigo_producto == null || this.codigo_producto.trim().isEmpty()) {
-            this.codigo_producto = "PROD-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
+        if (this.codigoProducto == null || this.codigoProducto.trim().isEmpty()) {
+            this.codigoProducto = "PROD-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
         }
     }
 

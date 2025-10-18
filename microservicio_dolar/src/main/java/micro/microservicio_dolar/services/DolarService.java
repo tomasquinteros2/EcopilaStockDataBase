@@ -97,7 +97,7 @@ public class DolarService {
         return dolarRepository.findById(id).orElse(null);
     }
 
-    @Cacheable(value = "dolar", key = "#id")
+    @Cacheable(value = "dolarValor", key = "#id")
     @Transactional
     public BigDecimal getValorDolar(Long id) {
         return dolarRepository.findById(id)
@@ -115,7 +115,10 @@ public class DolarService {
 
     @Caching(
             put = { @CachePut(value = "dolar", key = "#id") },
-            evict = { @CacheEvict(value = "dolares", allEntries = true) }
+            evict = {
+                    @CacheEvict(value = "dolares", allEntries = true),
+                    @CacheEvict(value = "dolarValor", key = "#id")
+            }
     )
     @Transactional
     public Dolar update(Long id, Dolar dolarDetails) {
@@ -132,7 +135,8 @@ public class DolarService {
 
     @Caching(evict = {
             @CacheEvict(value = "dolar", key = "#id"),
-            @CacheEvict(value = "dolares", allEntries = true)
+            @CacheEvict(value = "dolares", allEntries = true),
+            @CacheEvict(value = "dolarValor", key = "#id")
     })
     @Transactional
     public void delete(Long id) {

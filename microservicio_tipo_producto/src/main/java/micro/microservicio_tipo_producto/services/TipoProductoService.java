@@ -32,7 +32,7 @@ public class TipoProductoService {
         this.tipoProductoRepository = tipoProductoRepository;
         this.objectMapper = new ObjectMapper();
     }
-    @Cacheable("tiposProducto")
+    @Cacheable(value = "tiposProducto", unless = "#result == null || #result.isEmpty()")
     public List<TipoProducto> findAll() {
         log.info("Buscando todos los tipos de producto.");
         return tipoProductoRepository.findAll();
@@ -82,7 +82,10 @@ public class TipoProductoService {
         return tipoProductoRepository.saveAll(tiposRealmenteNuevos);
     }
 
-    @CacheEvict(value = "tiposProducto", allEntries = true)
+    @Caching(
+            put = { @CachePut(value = "tipoProducto", key = "#result.id") },
+            evict = { @CacheEvict(value = "tiposProducto", allEntries = true) }
+    )
     @Transactional
     public TipoProducto save(TipoProducto tipoProducto) {
         log.info("Guardando nuevo tipo de producto: {}", tipoProducto);
@@ -98,8 +101,10 @@ public class TipoProductoService {
         return tipoGuardado;
     }
 
-    @CachePut(value = "tipoProducto", key = "#id")
-    @CacheEvict(value = "tiposProducto", allEntries = true)
+    @Caching(
+            put = { @CachePut(value = "tipoProducto", key = "#id") },
+            evict = { @CacheEvict(value = "tiposProducto", allEntries = true) }
+    )
     @Transactional
     public TipoProducto update(Long id, TipoProducto tipoProductoDetails) {
         log.info("Actualizando tipo de producto con ID: {}", id);
@@ -122,8 +127,8 @@ public class TipoProductoService {
     }
 
     @Caching(evict = {
-            @CacheEvict(value = "tipoProducto", key = "#id"),
-            @CacheEvict(value = "tiposProducto", allEntries = true)
+            @CacheEvict(value = "tiposProducto", allEntries = true),
+            @CacheEvict(value = "tipoProducto", key = "#id")
     })
     @Transactional
     public void delete(Long id) {

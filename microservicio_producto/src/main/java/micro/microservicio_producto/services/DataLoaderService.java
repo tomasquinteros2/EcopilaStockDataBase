@@ -73,7 +73,7 @@ public class DataLoaderService {
 
     private Producto crearProductoDesdeCSV(CSVRecord record, BigDecimal valorDolar, DateTimeFormatter formatter) {
         Producto p = new Producto();
-        p.setCodigo_producto(record.get("CODIGO"));
+        p.setCodigoProducto(record.get("CODIGO"));
         p.setIva(new BigDecimal(record.get("IVA")));
         p.setDescripcion(record.get("DESCRIPCION"));
 

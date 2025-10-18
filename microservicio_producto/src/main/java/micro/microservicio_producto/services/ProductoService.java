@@ -1,5 +1,7 @@
 package micro.microservicio_producto.services;
 
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
@@ -42,6 +44,11 @@ public class ProductoService {
     private final ProveedorClient proveedorClient;
     private final ObjectMapper objectMapper;
 
+    @PersistenceContext
+    private EntityManager em;
+
+    private static final java.math.BigDecimal RESTO_DEFAULT = new java.math.BigDecimal("100");
+
     @Value("${app.dolar.default-value:1200.00}")
     private String dolarDefaultValue;
 
@@ -55,52 +62,7 @@ public class ProductoService {
         this.proveedorClient = proveedorClient;
         this.objectMapper = new ObjectMapper();
     }
-    @Transactional(readOnly = true)
-    public Page<ProductoPageDTO> findAllPaginatedAndFiltered(String search, Long proveedorId, Long tipoId, Pageable pageable) {
-        Specification<Producto> spec = (root, query, criteriaBuilder) -> {
-            List<Predicate> predicates = new ArrayList<>();
-            if (search != null && !search.trim().isEmpty()) {
-                String likePattern = "%" + search.toLowerCase() + "%";
-                predicates.add(criteriaBuilder.or(
-                        criteriaBuilder.like(criteriaBuilder.lower(root.get("codigo_producto")), likePattern),
-                        criteriaBuilder.like(criteriaBuilder.lower(root.get("descripcion")), likePattern)
-                ));
-            }
-            if (proveedorId != null) {
-                predicates.add(criteriaBuilder.equal(root.get("proveedorId"), proveedorId));
-            }
-            if (tipoId != null) {
-                predicates.add(criteriaBuilder.equal(root.get("tipoProductoId"), tipoId));
-            }
-            return criteriaBuilder.and(predicates.toArray(new Predicate[0]));
-        };
 
-        Page<Producto> productoPage = productoRepository.findAll(spec, pageable);
-
-        return convertToPageDTO(productoPage, pageable);    }
-
-    /*private ProductoPageDTO convertToPageDTO(Producto producto) {
-        ProductoPageDTO dto = new ProductoPageDTO();
-        dto.setId(producto.getId());
-        dto.setCodigo_producto(producto.getCodigo_producto());
-        dto.setDescripcion(producto.getDescripcion());
-        dto.setCantidad(producto.getCantidad());
-        dto.setPrecio_publico(producto.getPrecio_publico());
-        dto.setProveedorId(producto.getProveedorId());
-        dto.setTipoProductoId(producto.getTipoProductoId());
-        dto.setProductosRelacionadosIds(productoRepository.findProductosRelacionadosIdsByProductoId(producto.getId()));
-        dto.setCostoFijo(producto.isCostoFijo());
-        dto.setCosto_dolares(producto.getCosto_dolares());
-        dto.setCosto_pesos(producto.getCosto_pesos());
-        dto.setPorcentaje_ganancia(producto.getPorcentaje_ganancia());
-        dto.setIva(producto.getIva());
-        dto.setResto(producto.getResto());
-        dto.setPrecio_sin_redondear(producto.getPrecio_sin_redondear());
-        dto.setPrecio_publico_us(producto.getPrecio_publico_us());
-        dto.setPrecio_sin_iva(producto.getPrecio_sin_iva());
-        dto.setFecha_ingreso(producto.getFecha_ingreso());
-        return dto;
-    }*/
     private Page<ProductoPageDTO> convertToPageDTO(Page<Producto> productoPage, Pageable pageable) {
         List<Long> productoIds = productoPage.stream().map(Producto::getId).toList();
         List<Object[]> relaciones = productoRepository.findRelacionadosIdsByProductoIds(productoIds);
@@ -115,7 +77,7 @@ public class ProductoService {
         List<ProductoPageDTO> dtos = productoPage.stream().map(producto -> {
             ProductoPageDTO dto = new ProductoPageDTO();
             dto.setId(producto.getId());
-            dto.setCodigo_producto(producto.getCodigo_producto());
+            dto.setCodigoProducto(producto.getCodigoProducto());
             dto.setDescripcion(producto.getDescripcion());
             dto.setCantidad(producto.getCantidad());
             dto.setPrecio_publico(producto.getPrecio_publico());
@@ -137,42 +99,7 @@ public class ProductoService {
 
         return new PageImpl<>(dtos, pageable, productoPage.getTotalElements());
     }
-    /*@Transactional(readOnly = true)
-    public Page<ProductoPageDTO> findAllPaginatedAndFiltered(Long id,
-                                                             String codigo_producto,
-                                                             String descripcion,
-                                                             Long proveedorId,
-                                                             Long tipoId,
-                                                             Pageable pageable) {
-        if (id != null) {
-            return productoRepository.findById(id)
-                    .map(prod -> new PageImpl<>(List.of(convertToPageDTO(prod)), pageable, 1))
-                    .orElseGet(() -> new PageImpl<>(List.of(), pageable, 0));
-        }
 
-        Specification<Producto> spec = (root, query, criteriaBuilder) -> {
-            List<Predicate> predicates = new ArrayList<>();
-
-            if (codigo_producto != null && !codigo_producto.trim().isEmpty()) {
-                String likePattern = "%" + codigo_producto.toLowerCase() + "%";
-                predicates.add(criteriaBuilder.like(criteriaBuilder.lower(root.get("codigo_producto")), likePattern));
-            }
-            if (descripcion != null && !descripcion.trim().isEmpty()) {
-                String likePattern = "%" + descripcion.toLowerCase() + "%";
-                predicates.add(criteriaBuilder.like(criteriaBuilder.lower(root.get("descripcion")), likePattern));
-            }
-            if (proveedorId != null) {
-                predicates.add(criteriaBuilder.equal(root.get("proveedorId"), proveedorId));
-            }
-            if (tipoId != null) {
-                predicates.add(criteriaBuilder.equal(root.get("tipoProductoId"), tipoId));
-            }
-            return criteriaBuilder.and(predicates.toArray(new Predicate[0]));
-        };
-
-        Page<Producto> productoPage = productoRepository.findAll(spec, pageable);
-        return productoPage.map(this::convertToPageDTO);
-    }*/
     @Transactional(readOnly = true)
     public Page<ProductoPageDTO> findAllPaginatedAndFiltered(Long id,
                                                              String codigo_producto,
@@ -182,21 +109,45 @@ public class ProductoService {
                                                              Pageable pageable) {
         Specification<Producto> spec = (root, query, criteriaBuilder) -> {
             List<Predicate> predicates = new ArrayList<>();
-            if (id != null) {
-                predicates.add(criteriaBuilder.equal(root.get("id"), id));
+
+            // Crear predicados de búsqueda de texto
+            if ((id != null) || (codigo_producto != null && !codigo_producto.trim().isEmpty()) ||
+                    (descripcion != null && !descripcion.trim().isEmpty())) {
+
+                List<Predicate> searchPredicates = new ArrayList<>();
+
+                if (id != null) {
+                    searchPredicates.add(criteriaBuilder.like(
+                            criteriaBuilder.lower(root.get("id").as(String.class)),
+                            "%" + id.toString().toLowerCase() + "%"
+                    ));
+                }
+
+                if (codigo_producto != null && !codigo_producto.trim().isEmpty()) {
+                    searchPredicates.add(criteriaBuilder.like(
+                            criteriaBuilder.lower(root.get("codigoProducto")),
+                            "%" + codigo_producto.toLowerCase() + "%"
+                    ));
+                }
+
+                if (descripcion != null && !descripcion.trim().isEmpty()) {
+                    searchPredicates.add(criteriaBuilder.like(
+                            criteriaBuilder.lower(root.get("descripcion")),
+                            "%" + descripcion.toLowerCase() + "%"
+                    ));
+                }
+
+                // Usar OR para buscar en cualquiera de los campos
+                predicates.add(criteriaBuilder.or(searchPredicates.toArray(new Predicate[0])));
             }
-            if (codigo_producto != null && !codigo_producto.trim().isEmpty()) {
-                predicates.add(criteriaBuilder.like(criteriaBuilder.lower(root.get("codigo_producto")), "%" + codigo_producto.toLowerCase() + "%"));
-            }
-            if (descripcion != null && !descripcion.trim().isEmpty()) {
-                predicates.add(criteriaBuilder.like(criteriaBuilder.lower(root.get("descripcion")), "%" + descripcion.toLowerCase() + "%"));
-            }
+
             if (proveedorId != null) {
                 predicates.add(criteriaBuilder.equal(root.get("proveedorId"), proveedorId));
             }
             if (tipoId != null) {
                 predicates.add(criteriaBuilder.equal(root.get("tipoProductoId"), tipoId));
             }
+
             return criteriaBuilder.and(predicates.toArray(new Predicate[0]));
         };
 
@@ -226,27 +177,31 @@ public class ProductoService {
 
     @Transactional
     public Producto save(Producto incomingProduct) {
-        Optional<Producto> existingProductOpt = productoRepository.findByCodigo_producto(incomingProduct.getCodigo_producto());
+        if (incomingProduct.getCodigoProducto() == null || incomingProduct.getCodigoProducto().trim().isEmpty()) {
+            incomingProduct.setCodigoProducto("PROD-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase());
+        }
+
+        Optional<Producto> existingProductOpt = productoRepository.findByCodigoProductoAndProveedorId(
+                incomingProduct.getCodigoProducto(),
+                incomingProduct.getProveedorId()
+        );
 
         Producto productToSave = existingProductOpt.orElse(incomingProduct);
 
         if (existingProductOpt.isPresent()) {
-            log.info("Producto con código {} ya existe. Actualizando datos y stock.", incomingProduct.getCodigo_producto());
-
+            log.info("Producto con código {} y proveedor {} ya existe. Actualizando.",
+                    incomingProduct.getCodigoProducto(), incomingProduct.getProveedorId());
             productToSave.setDescripcion(incomingProduct.getDescripcion());
             productToSave.setPrecio_sin_iva(incomingProduct.getPrecio_sin_iva());
             productToSave.setPorcentaje_ganancia(incomingProduct.getPorcentaje_ganancia());
             productToSave.setIva(incomingProduct.getIva());
-
             productToSave.setCantidad(productToSave.getCantidad() + incomingProduct.getCantidad());
-
         } else {
-            log.info("Creando nuevo producto con código {}", incomingProduct.getCodigo_producto());
+            log.info("Creando nuevo producto con código {}", incomingProduct.getCodigoProducto());
             productToSave.setCantidad(incomingProduct.getCantidad() > 0 ? incomingProduct.getCantidad() : 1);
         }
 
         productToSave.setFecha_ingreso(LocalDate.now());
-
         validarRelaciones(productToSave.getTipoProductoId(), productToSave.getProveedorId());
 
         if (!productToSave.isCostoFijo()) {
@@ -392,7 +347,7 @@ public class ProductoService {
 
         BigDecimal resto = producto.getResto() != null && producto.getResto().compareTo(BigDecimal.ZERO) > 0
                 ? producto.getResto()
-                : new BigDecimal("1000");
+                : RESTO_DEFAULT;;
         BigDecimal precioPublico = precioSinRedondear.divide(resto, 0, RoundingMode.CEILING).multiply(resto);
         producto.setPrecio_publico(precioPublico.setScale(2, RoundingMode.HALF_UP));
     }
@@ -414,7 +369,7 @@ public class ProductoService {
         producto.setPrecio_sin_redondear(precioSinRedondear.setScale(4, RoundingMode.HALF_UP));
         BigDecimal resto = producto.getResto() != null && producto.getResto().compareTo(BigDecimal.ZERO) > 0
                 ? producto.getResto()
-                : new BigDecimal("1000");
+                : RESTO_DEFAULT;;
         BigDecimal precioPublico = precioSinRedondear.divide(resto, 0, RoundingMode.CEILING).multiply(resto);
         producto.setPrecio_publico(precioPublico.setScale(2, RoundingMode.HALF_UP));
     }
@@ -443,7 +398,7 @@ public class ProductoService {
     }
 
     private void updateProductoFields(Producto target, Producto source) {
-        if (source.getCodigo_producto() != null) target.setCodigo_producto(source.getCodigo_producto());
+        if (source.getCodigoProducto() != null) target.setCodigoProducto(source.getCodigoProducto());
         if (source.getDescripcion() != null) target.setDescripcion(source.getDescripcion());
         if (source.getTipoProductoId() != null) target.setTipoProductoId(source.getTipoProductoId());
         if (source.getProveedorId() != null) target.setProveedorId(source.getProveedorId());
@@ -458,8 +413,89 @@ public class ProductoService {
             target.setProductosRelacionados(nuevasRelaciones);
         }
     }
-
     @Transactional
+    public void saveAllProducts(List<Producto> incomingProducts) {
+        if (incomingProducts == null || incomingProducts.isEmpty()) {
+            return;
+        }
+
+        Map<Long, Boolean> tipoOk = new HashMap<>();
+        Map<Long, Boolean> proveedorOk = new HashMap<>();
+        java.math.BigDecimal valorDolar = obtenerValorDolar();
+        int batchSize = 100;
+        int processed = 0;
+
+        for (Producto incoming : incomingProducts) {
+            for (int attempt = 1; attempt <= 2; attempt++) {
+                try {
+                    if (incoming.getCodigoProducto() == null || incoming.getCodigoProducto().trim().isEmpty()) {
+                        incoming.setCodigoProducto("PROD-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase());
+                    }
+
+                    if (incoming.getResto() == null || incoming.getResto().compareTo(java.math.BigDecimal.ZERO) <= 0) {
+                        incoming.setResto(RESTO_DEFAULT);
+                    }
+
+                    Long tipoId = incoming.getTipoProductoId();
+                    Long proveedorId = incoming.getProveedorId();
+                    if (tipoId != null && !Boolean.TRUE.equals(tipoOk.get(tipoId))) {
+                        tipoProductoClient.getTipoProductoById(tipoId);
+                        tipoOk.put(tipoId, Boolean.TRUE);
+                    }
+                    if (proveedorId != null && !Boolean.TRUE.equals(proveedorOk.get(proveedorId))) {
+                        proveedorClient.getProveedorById(proveedorId);
+                        proveedorOk.put(proveedorId, Boolean.TRUE);
+                    }
+
+                    Optional<Producto> existingOpt = productoRepository.findByCodigoProductoAndProveedorId(
+                            incoming.getCodigoProducto(),
+                            incoming.getProveedorId()
+                    );
+
+                    Producto entity;
+                    if (existingOpt.isPresent()) {
+                        entity = existingOpt.get();
+                        updateProductoFields(entity, incoming);
+                    } else {
+                        entity = incoming;
+                        if (entity.getFecha_ingreso() == null) {
+                            entity.setFecha_ingreso(LocalDate.now());
+                        }
+                    }
+
+                    if (entity.isCostoFijo()) {
+                        calculateFixedCostPrices(entity);
+                    } else {
+                        recalculatePrices(entity, valorDolar);
+                    }
+
+                    productoRepository.save(entity);
+
+                    if (++processed % batchSize == 0) {
+                        em.flush();
+                        em.clear();
+                    }
+
+                    break;
+                } catch (feign.FeignException | ResourceNotFoundException ex) {
+                    if (attempt == 2) {
+                        log.error("Fallo definitivo al procesar producto {}: {}", incoming.getCodigoProducto(), ex.getMessage());
+                        throw ex;
+                    }
+                    log.warn("Fallo al procesar producto {} (intento {}/2). Reintentando...", incoming.getCodigoProducto(), attempt);
+                    try {
+                        Thread.sleep(200L);
+                    } catch (InterruptedException ie) {
+                        Thread.currentThread().interrupt();
+                    }
+                }
+            }
+        }
+
+        em.flush();
+        em.clear();
+    }
+    /*@Transactional
     public void saveAllProducts(List<Producto> incomingProducts) {
         if (incomingProducts == null || incomingProducts.isEmpty()) {
             return;
@@ -536,13 +572,16 @@ public class ProductoService {
             productoRepository.saveAll(productsToPersist);
             log.info("¡Carga masiva completada con éxito!");
         }
-    }
+    }*/
     @Transactional
     public void deleteMultiple(List<Long> ids) {
         if (ids == null || ids.isEmpty()) {
             throw new IllegalArgumentException("La lista de IDs no puede estar vacía.");
         }
+        log.info("Eliminando múltiples relaciones con IDs en service: {}", ids);
         productoRepository.eliminarRelacionesEnBloque(ids);
+        log.info("Se eliminaron las relaciones: {}", ids);
         productoRepository.deleteAllById(ids);
+        log.info("Se eliminaron los productos: {}", ids);
     }
 }

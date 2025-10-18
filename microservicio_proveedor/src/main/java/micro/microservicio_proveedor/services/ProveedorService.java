@@ -34,7 +34,7 @@ public class ProveedorService {
         this.proveedorRepository = proveedorRepository;
     }
 
-    @Cacheable("proveedores")
+    @Cacheable(value = "proveedores", unless = "#result == null || #result.isEmpty()")
     @Transactional
     public java.util.List<Proveedor> findAll() {
         log.info("Buscando todos los proveedores y sus detalles desde la BD.");
@@ -48,6 +48,7 @@ public class ProveedorService {
                 .orElseThrow(() -> new ResourceNotFoundException("Proveedor no encontrado con ID: " + id));
         return ProveedorMapper.toDTO(proveedor);
     }
+    @Cacheable(value = "proveedor", key = "#id")
     public Proveedor findById(Long id) {
         log.info("Buscando proveedor con ID: {} desde la BD.", id);
         return proveedorRepository.findById(id)
@@ -56,7 +57,7 @@ public class ProveedorService {
 
     @Caching(evict = {
             @CacheEvict(value = "proveedores", allEntries = true),
-            @CacheEvict(value = "proveedor", allEntries = true)
+            @CacheEvict(value = "proveedorDto", allEntries = true)
     })
     @Transactional
     public Proveedor save(Proveedor proveedor) {
@@ -78,7 +79,10 @@ public class ProveedorService {
 
     @Caching(
             put = { @CachePut(value = "proveedor", key = "#id") },
-            evict = { @CacheEvict(value = "proveedores", allEntries = true) }
+            evict = {
+                    @CacheEvict(value = "proveedores", allEntries = true),
+                    @CacheEvict(value = "proveedorDto", key = "#id")
+            }
     )
     @Transactional
     public Proveedor update(Long id, Proveedor proveedorDetails) {
@@ -123,7 +127,8 @@ public class ProveedorService {
 
     @Caching(evict = {
             @CacheEvict(value = "proveedor", key = "#id"),
-            @CacheEvict(value = "proveedores", allEntries = true)
+            @CacheEvict(value = "proveedores", allEntries = true),
+            @CacheEvict(value = "proveedorDto", key = "#id")
     })
     @Transactional
     public void delete(Long id) {

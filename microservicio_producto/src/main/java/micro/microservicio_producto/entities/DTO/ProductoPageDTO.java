@@ -8,7 +8,7 @@ import java.util.List;
 @Data
 public class ProductoPageDTO {
     private Long id;
-    private String codigo_producto;
+    private String codigoProducto;
     private String descripcion;
     private int cantidad;
     private BigDecimal precio_publico;
