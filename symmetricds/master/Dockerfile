@@ -1,34 +1,35 @@
-# symmetricds/master/Dockerfile
-
-# Utiliza una imagen base de OpenJDK 17
 FROM openjdk:21-jdk-slim
 
-# Instala dependencias necesarias (cliente de postgres y sed)
+# Instala dependencias necesarias
 RUN apt-get update && apt-get install -y --no-install-recommends \
     postgresql-client \
     sed \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Establece el directorio de trabajo
 WORKDIR /app
 
-# --- Copia y da permisos a los archivos ---
-# 1. Copia la aplicación SymmetricDS a la imagen.
-#    Esta ruta es relativa a la raíz de tu proyecto (el 'build context').
+# Copia SymmetricDS
 COPY symmetricds/symmetric-ds-3.14.0/ ./symmetric-ds-3.14.0/
 
-# 2. Copia el script de inicialización a la imagen.
-COPY symmetricds/master/init-symmetric-master.sh /app/init-symmetric-master.sh
+# IMPORTANTE: Asegúrate de copiar el archivo correcto
+COPY symmetricds/master/engines/master.properties ./symmetric-ds-3.14.0/engines/master.properties
 
-# 3. Copia el script de configuración SQL a la imagen.
+# Verificar que la configuración fue copiada correctamente
+RUN echo "=== Verificando master.properties ===" && \
+    cat ./symmetric-ds-3.14.0/engines/master.properties | grep -E "(registration\.url|sync\.url|engine\.name)" || \
+    (echo "ERROR: master.properties no contiene las propiedades necesarias" && exit 1)
+
+# Copia scripts
+COPY symmetricds/master/init-symmetric-master.sh /app/init-symmetric-master.sh
 COPY symmetricds/insert_config.sql /app/insert_config.sql
 
-# 4. Corrige finales de línea (si vienes de Windows) y da permisos de ejecución al script.
+# Permisos de ejecución
 RUN sed -i 's/\r$//' /app/init-symmetric-master.sh && \
-    chmod +x /app/init-symmetric-master.sh
+    chmod +x /app/init-symmetric-master.sh && \
+    chmod +x /app/symmetric-ds-3.14.0/bin/sym
 
-# 5. Corrige el error de permisos. Le da permisos de ejecución al binario 'sym'.
-#    
-RUN chmod +x /app/symmetric-ds-3.14.0/bin/sym
+# Variables de entorno
+ENV JAVA_OPTS="-Xmx512m"
 
-# El comando de inicio se especificará en docker-compose.online.yml
+EXPOSE 31415

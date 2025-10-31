@@ -83,9 +83,63 @@ INSERT INTO sym_parameter (external_id, node_group_id, param_key, param_value, c
 VALUES ('ALL', 'master_group', 'db.quote.numbers.in.where.enabled', 'false', now(), now())
     ON CONFLICT (external_id, node_group_id, param_key) DO NOTHING;
 
-INSERT INTO sym_column (trigger_id, column_name, pk, updateable, included, create_time, last_update_time)
+INSERT INTO sym_conflict (
+    conflict_id, source_node_group_id, target_node_group_id,
+    target_channel_id, target_catalog_name, target_schema_name, target_table_name,
+    detect_type, resolve_type, ping_back, resolve_changes_only, resolve_row_only,
+    detect_expression, create_time, last_update_time
+)
 VALUES
-    ('usuario_trigger', 'totp_secret', 0, 1, 1, now(), now()),
-    ('usuario_trigger', 'two_factor_enabled', 0, 1, 1, now(), now()),
-    ('usuario_trigger', 'account_verified', 0, 1, 1, now(), now())
-    ON CONFLICT (trigger_id, column_name) DO NOTHING;
+    ('producto_conflict', 'client_group', 'master_group',
+     'producto_channel', NULL, 'public', 'producto',
+     'USE_TIMESTAMP', 'NEWER_WINS', 'SINGLE_ROW', 1, 1,
+     NULL, now(), now()),
+    ('productos_relacionados_conflict', 'client_group', 'master_group',
+     'producto_channel', NULL, 'public', 'productos_relacionados',
+     'USE_PK_DATA', 'FALLBACK', 'OFF', 1, 1,
+     NULL, now(), now()),
+    ('proveedor_conflict', 'client_group', 'master_group',
+     'proveedor_channel', NULL, 'public', 'proveedor',
+     'USE_TIMESTAMP', 'NEWER_WINS', 'OFF', 1, 1,
+     NULL, now(), now()),
+    ('tipo_producto_conflict', 'client_group', 'master_group',
+     'tipo_producto_channel', NULL, 'public', 'tipo_producto',
+     'USE_TIMESTAMP', 'NEWER_WINS', 'OFF', 1, 1,
+     NULL, now(), now()),
+    ('dolar_conflict', 'client_group', 'master_group',
+     'dolar_channel', NULL, 'public', 'dolar',
+     'USE_TIMESTAMP', 'NEWER_WINS', 'OFF', 1, 1,
+     NULL, now(), now()),
+    ('usuario_conflict', 'client_group', 'master_group',
+     'auth_channel', NULL, 'public', 'usuario',
+     'USE_PK_DATA', 'MANUAL', 'OFF', 1, 1,
+     NULL, now(), now())
+    ON CONFLICT (conflict_id)
+DO UPDATE SET
+    ping_back = EXCLUDED.ping_back,
+           resolve_type = EXCLUDED.resolve_type,
+           detect_type = EXCLUDED.detect_type,
+           last_update_time = now();
+INSERT INTO sym_parameter (external_id, node_group_id, param_key, param_value, create_time, last_update_time)
+VALUES
+    ('ALL', 'ALL', 'job.pull.period.time.ms', '5000', now(), now()),
+    ('ALL', 'ALL', 'job.push.period.time.ms', '5000', now(), now()),
+    ('ALL', 'ALL', 'job.routing.period.time.ms', '3000', now(), now()),
+    ('ALL', 'master_group', 'concurrent.workers', '5', now(), now()),
+    ('ALL', 'client_group', 'concurrent.workers', '3', now(), now()),
+    ('ALL', 'ALL', 'routing.max.batch.size', '10000', now(), now()),
+    ('ALL', 'ALL', 'transport.max.bytes.to.sync', '2097152', now(), now())
+    ON CONFLICT (external_id, node_group_id, param_key)
+DO UPDATE SET
+    param_value = EXCLUDED.param_value,
+           last_update_time = now();
+
+-- Habilitar initial load automático para nuevos clientes
+INSERT INTO sym_parameter (external_id, node_group_id, param_key, param_value, create_time, last_update_time)
+VALUES
+    ('ALL', 'client_group', 'initial.load.create.first', 'true', now(), now()),
+    ('ALL', 'client_group', 'auto.registration', 'true', now(), now())
+    ON CONFLICT (external_id, node_group_id, param_key)
+DO UPDATE SET
+    param_value = EXCLUDED.param_value,
+           last_update_time = now();

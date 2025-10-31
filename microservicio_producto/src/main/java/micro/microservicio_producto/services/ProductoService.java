@@ -426,6 +426,7 @@ public class ProductoService {
         int processed = 0;
 
         for (Producto incoming : incomingProducts) {
+            log.info(incoming.toString());
             for (int attempt = 1; attempt <= 2; attempt++) {
                 try {
                     if (incoming.getCodigoProducto() == null || incoming.getCodigoProducto().trim().isEmpty()) {

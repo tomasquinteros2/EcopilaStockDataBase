@@ -1,26 +1,39 @@
-# symmetricds/client/Dockerfile (Versión Corregida)
 FROM openjdk:17-jdk-slim
 
-# Establecemos el directorio de trabajo principal.
 WORKDIR /app
 
-# Copiamos la distribución de SymmetricDS.
+# Copia la distribución de SymmetricDS
 COPY symmetricds/symmetric-ds-3.14.0/ ./
 
-# Copiamos el fichero de configuración del cliente.
-COPY symmetricds/client/engines/client.properties ./engines/
+# Copia el archivo de configuración como template
+COPY symmetricds/client/engines/client.properties ./engines/client.properties.template
 
-# ✅ SOLUCIÓN: Establecemos la variable de entorno JAVA_OPTS.
-# El script 'sym' usará esta variable para pasar opciones a la JVM.
-# -Dh2.baseDir=/app le dice a la base de datos H2 que el directorio /app
-# es un directorio base seguro para crear archivos de base de datos.
-ENV JAVA_OPTS="-Dh2.baseDir=/app"
+# Script de inicio que genera external.id único
+RUN echo '#!/bin/bash\n\
+set -e\n\
+# Genera un ID único basado en hostname y timestamp\n\
+HOSTNAME=$(hostname)\n\
+TIMESTAMP=$(date +%s)\n\
+RANDOM_NUM=$((RANDOM % 10000))\n\
+EXTERNAL_ID="client_node_${HOSTNAME}_${TIMESTAMP}_${RANDOM_NUM}"\n\
+\n\
+echo "Generando configuración con external.id: ${EXTERNAL_ID}"\n\
+\n\
+# Reemplaza el placeholder en el template\n\
+sed "s/{{EXTERNAL_ID}}/${EXTERNAL_ID}/g" /app/engines/client.properties.template > /app/engines/client.properties\n\
+\n\
+# Muestra la configuración generada\n\
+echo "Configuración del cliente:"\n\
+cat /app/engines/client.properties\n\
+\n\
+# Inicia SymmetricDS\n\
+exec /app/bin/sym --port 8081 --server\n\
+' > /app/start-client.sh && chmod +x /app/start-client.sh
 
-# Damos permisos de ejecución al script.
+ENV JAVA_OPTS="-Dh2.baseDir=/app -Xmx512m"
+
 RUN chmod +x bin/sym
 
-# Exponemos el puerto.
 EXPOSE 8081
 
-# Comando de inicio (sin cambios).
-CMD ["./bin/sym", "--port", "8081", "--server"]
+CMD ["/app/start-client.sh"]

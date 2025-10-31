@@ -165,22 +165,29 @@ services:
     mem_limit: 300m
 
   symmetricds-client:
-   build:
-     context: .
-     dockerfile: symmetricds/client/Dockerfile
-   container_name: symmetricds_client
-   ports: [ "8081:8081" ]
-   depends_on:
-     producto-service:
-       condition: service_healthy
-     proveedor-service:
-       condition: service_healthy
-     tipo-producto-service:
-       condition: service_healthy
-     dolar-service:
-       condition: service_healthy
-     auth-service:
-       condition: service_started
+    build:
+      context: .
+      dockerfile: symmetricds/client/Dockerfile
+    container_name: symmetricds_client_${INSTANCE_ID:-1}
+    hostname: client-${INSTANCE_ID:-1}
+    ports:
+      - "${CLIENT_PORT:-8081}:8081"
+    environment:
+      - JAVA_OPTS=-Xmx512m -Dh2.baseDir=/app
+      - INSTANCE_ID=${INSTANCE_ID:-1}
+    depends_on:
+      producto-service:
+        condition: service_healthy
+      proveedor-service:
+        condition: service_healthy
+      tipo-producto-service:
+        condition: service_healthy
+      dolar-service:
+        condition: service_healthy
+      auth-service:
+        condition: service_started
+    networks:
+      - default
 
   frontend-pwa:
     build:

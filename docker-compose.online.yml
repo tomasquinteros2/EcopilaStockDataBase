@@ -58,14 +58,22 @@ services:
       context: .
       dockerfile: symmetricds/master/Dockerfile
     container_name: symmetricds_master
-    ports: [ "31415:31415" ]
+    ports:
+      - "31415:31415"
+    environment:
+      - JAVA_OPTS=-Xmx512m
     volumes:
       - symmetricds-master-data:/app/symmetric-ds-3.14.0/data
       - symmetricds-master-logs:/app/symmetric-ds-3.14.0/logs
-      - ./symmetricds/master/engines:/app/symmetric-ds-3.14.0/engines
     depends_on:
       postgres-db:
         condition: service_healthy
+    healthcheck:
+      test: [ "CMD-SHELL", "curl -f http://localhost:31415/sync/master/api/engine/status || exit 1" ]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
     command: /app/init-symmetric-master.sh
 
   redis-online:
@@ -176,8 +184,8 @@ services:
     mem_limit: 300m
 
 volumes:
-  postgres-data-online:
-  redis-data-online:
-  symmetricds-master-data:
   eureka-data-online:
+  redis-data-online:
+  postgres-data-online:
+  symmetricds-master-data:
   symmetricds-master-logs:
