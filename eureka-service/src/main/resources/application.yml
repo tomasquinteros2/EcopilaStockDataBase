@@ -4,11 +4,11 @@ server:
 spring:
   application:
     name: eureka-service
-  security:
-    basic:
-      enabled: false
   main:
     allow-bean-definition-overriding: true
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.security.servlet.SecurityAutoConfiguration
 
 eureka:
   instance:
@@ -30,7 +30,5 @@ management:
 
 logging:
   level:
-    com.netflix.eureka: DEBUG
-    com.netflix.discovery: DEBUG
-    org.springframework.web: DEBUG
-    micro.eurekaservice: DEBUG
+    com.netflix.eureka: INFO
+    com.netflix.discovery: INFO

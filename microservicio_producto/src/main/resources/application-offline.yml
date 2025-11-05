@@ -60,3 +60,6 @@ app:
   offline-mode: true
   storage:
     archive: /data/ventas
+  pricing:
+    auto-update:
+      enabled: false

@@ -54,8 +54,8 @@ public class SyncStatusService {
                 mensaje = "Sincronización completa y activa";
             }
 
-            log.info("Estado: activo={}, sincronizado={}, pendientes={}",
-                    servicioActivo, sincronizado, registrosPendientes);
+            //log.info("Estado: activo={}, sincronizado={}, pendientes={}",
+            //        servicioActivo, sincronizado, registrosPendientes);
 
             return new SyncStatusDTO(sincronizado, ultimaSincronizacion, mensaje, registrosPendientes);
 

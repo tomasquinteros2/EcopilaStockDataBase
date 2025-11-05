@@ -18,7 +18,11 @@ spring:
     redis:
       host: ${REDIS_HOST:redis-online}
       port: 6379
-
+feign:
+  client:
+    config:
+      microservicio-producto:
+        name: MICROSERVICIO-PRODUCTO
 eureka:
   client:
     serviceUrl:

@@ -1,10 +1,7 @@
 package micro.microservicio_producto.controllers;
 
 import jakarta.servlet.http.HttpServletRequest;
-import micro.microservicio_producto.entities.DTO.ProductoDTO;
-import micro.microservicio_producto.entities.DTO.ProductoPageDTO;
-import micro.microservicio_producto.entities.DTO.ProductoRelacionadoDTO;
-import micro.microservicio_producto.entities.DTO.ProductoRelacionadoResultadoDTO;
+import micro.microservicio_producto.entities.DTO.*;
 import micro.microservicio_producto.entities.Producto;
 import micro.microservicio_producto.feignClients.ProveedorClient;
 import micro.microservicio_producto.services.ProductoService;
@@ -32,7 +29,7 @@ public class ProductoController {
     }
 
     @GetMapping("")
-    public ResponseEntity<Page<ProductoPageDTO>> getAll(
+    public ResponseEntity<PageResponseDTO<ProductoPageDTO>> getAll(
             @RequestParam(required = false) Long id,
             @RequestParam(required = false) String codigoProducto,
             @RequestParam(required = false) String descripcion,
@@ -40,12 +37,10 @@ public class ProductoController {
             @RequestParam(required = false) Long tipoId,
             @PageableDefault(size = 20, sort = "id") Pageable pageable
     ) {
-        log.info("Recibiendo solicitud para obtener productos con filtros - id: {}, codigo_producto: {}, descripcion: {}, proveedorId: {}, tipoId: {}, pageable: {}",
-                id, codigoProducto, descripcion, proveedorId, tipoId, pageable);
         Page<ProductoPageDTO> paginaDeProductos = productoService.findAllPaginatedAndFiltered(
                 id, codigoProducto, descripcion, proveedorId, tipoId, pageable
         );
-        return ResponseEntity.ok(paginaDeProductos);
+        return ResponseEntity.ok(PageResponseDTO.fromPage(paginaDeProductos));
     }
 
     @GetMapping("/byDesc/{desc}")
@@ -83,7 +78,7 @@ public class ProductoController {
     }
     @PutMapping("/{id}")
     public ResponseEntity<Producto> updateProducto(@PathVariable Long id, @RequestBody Producto productoDetails) {
-        log.info("Actualizando producto ID: {}", id);
+        log.info("Actualizando producto"+ productoDetails);
         Producto updatedProducto = productoService.update(id, productoDetails);
         return ResponseEntity.ok(updatedProducto);
     }
@@ -125,5 +120,12 @@ public class ProductoController {
     public ResponseEntity<List<ProductoRelacionadoResultadoDTO>> getRelacionados(@PathVariable Long id) {
         List<ProductoRelacionadoResultadoDTO> resultado = productoService.obtenerRelacionadosConProveedor(id);
         return ResponseEntity.ok(resultado);
+    }
+
+    @PutMapping("/recalcular-por-proveedor/{proveedorId}")
+    public ResponseEntity<String> recalcularPorProveedor(@PathVariable Long proveedorId) {
+        log.info("Recalculando precios para productos del proveedor ID: {}", proveedorId);
+        productoService.recalcularPreciosPorProveedor(proveedorId);
+        return ResponseEntity.ok("Precios recalculados exitosamente");
     }
 }

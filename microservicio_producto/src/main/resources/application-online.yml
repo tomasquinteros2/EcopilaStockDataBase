@@ -33,3 +33,6 @@ eureka:
 app:
   storage:
     archive: /data/ventas_online
+  pricing:
+    auto-update:
+      enabled: true

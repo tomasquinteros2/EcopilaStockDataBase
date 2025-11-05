@@ -6,6 +6,7 @@ import micro.microservicio_proveedor.entities.dto.ProveedorMapper;
 import micro.microservicio_proveedor.entities.dto.ProveedorResponseDTO;
 import micro.microservicio_proveedor.exceptions.BusinessLogicException;
 import micro.microservicio_proveedor.exceptions.ResourceNotFoundException;
+import micro.microservicio_proveedor.feignClient.ProductoFeignClient;
 import micro.microservicio_proveedor.repositories.ProveedorRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -28,10 +29,12 @@ public class ProveedorService {
 
     private static final Logger log = LoggerFactory.getLogger(ProveedorService.class);
 
+    private final ProductoFeignClient productoFeignClient;
     private final ProveedorRepository proveedorRepository;
 
-    public ProveedorService(ProveedorRepository proveedorRepository) {
+    public ProveedorService(ProveedorRepository proveedorRepository,ProductoFeignClient productoFeignClient) {
         this.proveedorRepository = proveedorRepository;
+        this.productoFeignClient = productoFeignClient;
     }
 
     @Cacheable(value = "proveedores", unless = "#result == null || #result.isEmpty()")
@@ -95,8 +98,10 @@ public class ProveedorService {
                 throw new BusinessLogicException("Ya existe otro proveedor con el nombre: " + proveedorDetails.getNombre());
             }
         }
-        updateSimpleFields(existente, proveedorDetails);
 
+        boolean cotizacionCambio = hasCotizacionChanged(existente, proveedorDetails);
+
+        updateSimpleFields(existente, proveedorDetails);
         existente.getRazonesSociales().clear();
         if (proveedorDetails.getRazonesSociales() != null) {
             proveedorDetails.getRazonesSociales().forEach(rs -> {
@@ -107,6 +112,16 @@ public class ProveedorService {
         }
 
         Proveedor proveedorActualizado = proveedorRepository.save(existente);
+
+        if (cotizacionCambio) {
+            log.info("Cotización cambió para proveedor ID: {}. Notificando recalculo de precios.", id);
+            try {
+                productoFeignClient.recalcularPreciosPorProveedor(id);
+            } catch (Exception e) {
+                log.error("Error al notificar recalculo de precios para proveedor ID: {}", id, e);
+            }
+        }
+
         log.info("Proveedor con ID {} actualizado correctamente.", id);
         return proveedorActualizado;
     }
@@ -156,5 +171,12 @@ public class ProveedorService {
             throw new ResourceNotFoundException("No se encontraron los siguientes IDs de proveedor: " + uniqueIds);
         }
         log.info("Todos los {} IDs de proveedores fueron validados exitosamente.", uniqueIds.size());
+    }
+    private boolean hasCotizacionChanged(Proveedor existente, Proveedor nuevo) {
+        if (nuevo.getValorCotizacionManual() == null) {
+            return false;
+        }
+        return existente.getValorCotizacionManual() == null ||
+                existente.getValorCotizacionManual().compareTo(nuevo.getValorCotizacionManual()) != 0;
     }
 }

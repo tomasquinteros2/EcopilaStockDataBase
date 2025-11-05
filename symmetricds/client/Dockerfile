@@ -2,29 +2,34 @@ FROM openjdk:17-jdk-slim
 
 WORKDIR /app
 
-# Copia la distribución de SymmetricDS
-COPY symmetricds/symmetric-ds-3.14.0/ ./
+# Instalar net-tools para obtener MAC address
+RUN apt-get update && apt-get install -y --no-install-recommends net-tools && \
+    rm -rf /var/lib/apt/lists/*
 
-# Copia el archivo de configuración como template
+COPY symmetricds/symmetric-ds-3.14.0/ ./
 COPY symmetricds/client/engines/client.properties ./engines/client.properties.template
 
-# Script de inicio que genera external.id único
+# Script que genera ID único basado en MAC address del contenedor
 RUN echo '#!/bin/bash\n\
 set -e\n\
-# Genera un ID único basado en hostname y timestamp\n\
-HOSTNAME=$(hostname)\n\
-TIMESTAMP=$(date +%s)\n\
-RANDOM_NUM=$((RANDOM % 10000))\n\
-EXTERNAL_ID="client_node_${HOSTNAME}_${TIMESTAMP}_${RANDOM_NUM}"\n\
 \n\
-echo "Generando configuración con external.id: ${EXTERNAL_ID}"\n\
+# Obtener MAC address única del contenedor (elimina ":")\n\
+MAC_ADDRESS=$(cat /sys/class/net/eth0/address | tr -d ":")\n\
+EXTERNAL_ID="client_node_${MAC_ADDRESS}"\n\
 \n\
-# Reemplaza el placeholder en el template\n\
+echo "================================="\n\
+echo "Cliente SymmetricDS - Inicialización"\n\
+echo "================================="\n\
+echo "MAC Address: ${MAC_ADDRESS}"\n\
+echo "External ID: ${EXTERNAL_ID}"\n\
+echo ""\n\
+\n\
+# Reemplaza el placeholder\n\
 sed "s/{{EXTERNAL_ID}}/${EXTERNAL_ID}/g" /app/engines/client.properties.template > /app/engines/client.properties\n\
 \n\
-# Muestra la configuración generada\n\
-echo "Configuración del cliente:"\n\
-cat /app/engines/client.properties\n\
+echo "Configuración aplicada:"\n\
+cat /app/engines/client.properties | grep -E "(external.id|registration.url)"\n\
+echo ""\n\
 \n\
 # Inicia SymmetricDS\n\
 exec /app/bin/sym --port 8081 --server\n\

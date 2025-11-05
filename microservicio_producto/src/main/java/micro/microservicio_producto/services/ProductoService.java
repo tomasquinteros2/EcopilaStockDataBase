@@ -2,6 +2,7 @@ package micro.microservicio_producto.services;
 
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
@@ -205,7 +206,7 @@ public class ProductoService {
         validarRelaciones(productToSave.getTipoProductoId(), productToSave.getProveedorId());
 
         if (!productToSave.isCostoFijo()) {
-            BigDecimal valorDolar = obtenerValorDolar();
+            BigDecimal valorDolar = obtenerValorDolarParaProducto(productToSave.getProveedorId());
             recalculatePrices(productToSave, valorDolar);
         } else {
             calculateFixedCostPrices(productToSave);
@@ -217,11 +218,11 @@ public class ProductoService {
     @Transactional
     public Producto update(Long id, Producto productoDetails) {
         Producto productoExistente = findById(id);
-        log.info("Actualizando producto ID: {}", id);
         updateProductoFields(productoExistente, productoDetails);
 
         if (!productoExistente.isCostoFijo()) {
-            BigDecimal valorDolar = obtenerValorDolar();
+            // Obtener la cotización del PROVEEDOR del producto, no la oficial
+            BigDecimal valorDolar = obtenerValorDolarParaProducto(productoExistente.getProveedorId());
             recalculatePrices(productoExistente, valorDolar);
         } else {
             calculateFixedCostPrices(productoExistente);
@@ -271,7 +272,26 @@ public class ProductoService {
 
         log.info("Relación entre producto ID {} y producto ID {} eliminada.", dto.getProductoId(), dto.getProductoRelacionadoId());
     }
+    private BigDecimal obtenerValorDolarParaProducto(Long proveedorId) {
+        if (proveedorId == null) {
+            return obtenerValorDolar();
+        }
 
+        try {
+            ProveedorDTO proveedor = proveedorClient.getProveedorById(proveedorId).getBody();
+            if (proveedor != null
+                    && proveedor.getValorCotizacionManual() != null
+                    && proveedor.getValorCotizacionManual().compareTo(BigDecimal.ZERO) > 0) {
+                log.info("Usando cotización manual {} del proveedor ID: {}",
+                        proveedor.getValorCotizacionManual(), proveedorId);
+                return proveedor.getValorCotizacionManual();
+            }
+        } catch (Exception e) {
+            log.warn("No se pudo obtener cotización del proveedor ID: {}. Usando oficial", proveedorId);
+        }
+
+        return obtenerValorDolar();
+    }
     @Transactional(readOnly = true)
     public List<ProductoRelacionadoResultadoDTO> obtenerRelacionadosConProveedor(Long productoId) {
         Producto producto = findById(productoId);
@@ -289,10 +309,9 @@ public class ProductoService {
         return dtos;
     }
 
-    // --- MÉTODOS DE SINCRONIZACIÓN (ONLINE/NUBE) ---
-
     @Transactional
     @Profile("online")
+    @ConditionalOnProperty(name = "app.pricing.auto-update.enabled", havingValue = "true", matchIfMissing = true)
     @Scheduled(cron = "0 0 */3 * * *")
     public void actualizarPreciosProgramado() {
         log.info("--- Iniciando tarea programada: Actualización de precios ---");
@@ -331,6 +350,51 @@ public class ProductoService {
 
         log.info("--- Finalizada tarea programada: {} productos actualizados. Valor de dólar general: {} ---",
                 productosActualizados, valorDolarGeneral);
+    }
+
+    @Transactional
+    public void recalcularPreciosPorProveedor(Long proveedorId) {
+        log.info("Recalculando precios para productos del proveedor ID: {}", proveedorId);
+
+        BigDecimal valorDolar;
+        try {
+            ProveedorDTO proveedor = proveedorClient.getProveedorById(proveedorId).getBody();
+            if (proveedor == null) {
+                throw new ResourceNotFoundException("Proveedor no encontrado con ID: " + proveedorId);
+            }
+
+            valorDolar = (proveedor.getValorCotizacionManual() != null
+                    && proveedor.getValorCotizacionManual().compareTo(BigDecimal.ZERO) > 0)
+                    ? proveedor.getValorCotizacionManual()
+                    : obtenerValorDolar();
+
+            log.info("Usando cotización {} para proveedor ID: {}", valorDolar, proveedorId);
+        } catch (Exception e) {
+            log.error("Error al obtener cotización del proveedor ID: {}. Usando valor oficial", proveedorId, e);
+            valorDolar = obtenerValorDolar();
+        }
+
+        List<Producto> productos = productoRepository.findAll(
+                (root, query, cb) -> cb.and(
+                        cb.equal(root.get("proveedorId"), proveedorId),
+                        cb.equal(root.get("costoFijo"), false)
+                )
+        );
+
+        if (productos.isEmpty()) {
+            log.info("No hay productos sin costo fijo para el proveedor ID: {}", proveedorId);
+            return;
+        }
+
+        final BigDecimal valorDolarFinal = valorDolar;
+        productos.forEach(producto -> {
+            log.debug("Recalculando producto ID: {} con dólar: {}", producto.getId(), valorDolarFinal);
+            recalculatePrices(producto, valorDolarFinal);
+        });
+
+        productoRepository.saveAll(productos);
+        log.info("Recalculados {} productos del proveedor ID: {} con cotización: {}",
+                productos.size(), proveedorId, valorDolarFinal);
     }
 
     private void calculateFixedCostPrices(Producto producto) {
@@ -412,6 +476,8 @@ public class ProductoService {
             Set<Producto> nuevasRelaciones = new HashSet<>(productoRepository.findAllById(source.getProductosRelacionadosIds()));
             target.setProductosRelacionados(nuevasRelaciones);
         }
+        if(source.isCostoFijo() != target.isCostoFijo()) target.setCostoFijo(source.isCostoFijo());
+        if(source.getCosto_pesos() != null) target.setCosto_pesos(source.getCosto_pesos());
     }
     @Transactional
     public void saveAllProducts(List<Producto> incomingProducts) {

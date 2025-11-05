@@ -18,7 +18,6 @@ public class SyncStatusController {
 
     @GetMapping("/status")
     public ResponseEntity<SyncStatusDTO> status() {
-        log.info("Obteniendo estado de sincronización");
         return ResponseEntity.ok(service.getStatus());
     }
 }

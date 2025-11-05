@@ -22,6 +22,14 @@ spring:
   cloud:
     config:
       enabled: false
+    openfeign:
+      client:
+        config:
+          default:
+            connectTimeout: 5000
+            readTimeout: 5000
+          microservicio-producto:
+            url: ${FEIGN_PRODUCTO_SERVICE_URL:http://producto-service:8083}
   data:
     redis:
       host: ${REDIS_HOST:redis}
@@ -30,6 +38,11 @@ spring:
     type: redis
     redis:
       time-to-live: 60000 # 1 minuto
+feign:
+  client:
+    config:
+      microservicio-producto:
+        name: microservicio-producto
 eureka:
   client:
     enabled: true
