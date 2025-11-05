@@ -7,6 +7,8 @@ DB_USER="admin"
 DB_NAME="ecopila_db_online"
 export PGPASSWORD="password"
 
+MASTER_PUBLIC_URL="http://31.97.240.232:31415/sync/master"
+
 echo "=========================================="
 echo "SymmetricDS Master - Inicialización"
 echo "=========================================="
@@ -32,7 +34,6 @@ done
 echo "✅ PostgreSQL está listo"
 echo ""
 
-# Verificar si ya existe configuración previa
 echo "--> [$(date)] Verificando configuración existente..."
 EXISTING_CONFIG=$(psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" -t -c "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='public' AND table_name='sym_node';" 2>/dev/null | tr -d ' ')
 
@@ -69,14 +70,42 @@ fi
 
 echo ""
 echo "=========================================="
+echo "Configurando URL pública del Master"
+echo "=========================================="
+
+psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" <<-EOSQL
+  -- Actualizar sync_url del nodo master a IP pública
+  UPDATE sym_node
+  SET sync_url = '$MASTER_PUBLIC_URL'
+  WHERE node_id = 'master_node';
+
+  -- Configurar parámetro global de sync.url para master_group
+  INSERT INTO sym_parameter (external_id, node_group_id, param_key, param_value, create_time, last_update_by, last_update_time)
+  VALUES ('GLOBAL', 'master_group', 'sync.url', '$MASTER_PUBLIC_URL', CURRENT_TIMESTAMP, 'system', CURRENT_TIMESTAMP)
+  ON CONFLICT (external_id, node_group_id, param_key) DO UPDATE
+  SET param_value = EXCLUDED.param_value,
+      last_update_time = CURRENT_TIMESTAMP;
+
+  -- Configurar registration.url global para todos los nodos
+  INSERT INTO sym_parameter (external_id, node_group_id, param_key, param_value, create_time, last_update_by, last_update_time)
+  VALUES ('GLOBAL', 'ALL', 'registration.url', '$MASTER_PUBLIC_URL', CURRENT_TIMESTAMP, 'system', CURRENT_TIMESTAMP)
+  ON CONFLICT (external_id, node_group_id, param_key) DO UPDATE
+  SET param_value = EXCLUDED.param_value,
+      last_update_time = CURRENT_TIMESTAMP;
+EOSQL
+
+echo "✅ Master configurado con URL pública: $MASTER_PUBLIC_URL"
+
+echo ""
+echo "=========================================="
 echo "Verificación de Nodos Registrados"
 echo "=========================================="
-# Corrección del error SQL: Cast explícito a boolean
 psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" -c "
 SELECT
   node_id,
   node_group_id,
   external_id,
+  sync_url,
   CASE WHEN sync_enabled::boolean THEN 'Sí' ELSE 'No' END as sincronizacion
 FROM sym_node
 ORDER BY created_at_node_id;
@@ -100,7 +129,7 @@ echo "=========================================="
 echo "--> Puerto: 31415"
 echo "--> Grupo: master_group"
 echo "--> External ID: master_node"
-echo "--> Registration URL: http://symmetricds-master:31415/sync/master"
+echo "--> Registration URL: $MASTER_PUBLIC_URL"
 echo ""
 
 exec /app/symmetric-ds-3.14.0/bin/sym --port 31415 --server
