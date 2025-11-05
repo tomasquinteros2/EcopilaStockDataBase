@@ -1,11 +1,11 @@
 FROM eclipse-temurin:21-jdk-alpine
 
-# Instala dependencias necesarias
-RUN apt-get update && apt-get install -y --no-install-recommends \
+# Instala dependencias necesarias usando apk (Alpine package manager)
+RUN apk add --no-cache \
     postgresql-client \
+    bash \
     sed \
-    curl \
-    && rm -rf /var/lib/apt/lists/*
+    curl
 
 WORKDIR /app
 
@@ -33,3 +33,5 @@ RUN sed -i 's/\r$//' /app/init-symmetric-master.sh && \
 ENV JAVA_OPTS="-Xmx512m"
 
 EXPOSE 31415
+
+CMD ["/app/init-symmetric-master.sh"]
