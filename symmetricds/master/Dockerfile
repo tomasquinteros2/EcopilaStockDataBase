@@ -1,37 +1,40 @@
 FROM eclipse-temurin:21-jdk-alpine
 
-# Instala dependencias necesarias usando apk (Alpine package manager)
+WORKDIR /app
+
+# Instalar herramientas necesarias
 RUN apk add --no-cache \
     postgresql-client \
     bash \
-    sed \
+    dos2unix \
     curl
 
-WORKDIR /app
+# Copiar TODA la carpeta de SymmetricDS
+COPY symmetricds/symmetric-ds-3.14.0 /app/symmetric-ds-3.14.0
 
-# Copia SymmetricDS
-COPY symmetricds/symmetric-ds-3.14.0/ ./symmetric-ds-3.14.0/
+# Crear enlace simbólico para que SymmetricDS encuentre los archivos
+RUN ln -s /app/symmetric-ds-3.14.0 /app/bin
 
-# IMPORTANTE: Asegúrate de copiar el archivo correcto
-COPY symmetricds/master/engines/master.properties ./symmetric-ds-3.14.0/engines/master.properties
+# Copiar archivo de configuración DEL MASTER
+COPY symmetricds/master/engines/master.properties /app/symmetric-ds-3.14.0/engines/master.properties
 
-# Verificar que la configuración fue copiada correctamente
+# Verificar que master.properties fue copiado correctamente
 RUN echo "=== Verificando master.properties ===" && \
-    cat ./symmetric-ds-3.14.0/engines/master.properties | grep -E "(registration\.url|sync\.url|engine\.name)" || \
-    (echo "ERROR: master.properties no contiene las propiedades necesarias" && exit 1)
+    cat /app/symmetric-ds-3.14.0/engines/master.properties | grep -E "(sync\.url|registration\.url)" && \
+    echo "✅ master.properties copiado correctamente"
 
-# Copia scripts
-COPY symmetricds/master/init-symmetric-master.sh /app/init-symmetric-master.sh
+# Copiar scripts
 COPY symmetricds/insert_config.sql /app/insert_config.sql
+COPY symmetricds/master/init-symmetric-master.sh /app/init-symmetric-master.sh
 
-# Permisos de ejecución
-RUN sed -i 's/\r$//' /app/init-symmetric-master.sh && \
+# Convertir line endings y permisos
+RUN dos2unix /app/init-symmetric-master.sh && \
     chmod +x /app/init-symmetric-master.sh && \
     chmod +x /app/symmetric-ds-3.14.0/bin/sym
 
 # Variables de entorno
-ENV JAVA_OPTS="-Xmx512m"
+ENV JAVA_OPTS="-Xmx1024m"
 
 EXPOSE 31415
 
-CMD ["/app/init-symmetric-master.sh"]
+CMD ["/bin/bash", "/app/init-symmetric-master.sh"]

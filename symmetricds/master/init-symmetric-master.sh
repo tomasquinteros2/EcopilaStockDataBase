@@ -7,12 +7,31 @@ DB_USER="admin"
 DB_NAME="ecopila_db_online"
 export PGPASSWORD="password"
 
+SYMMETRIC_HOME="/app/symmetric-ds-3.14.0"
+SYM_BIN="${SYMMETRIC_HOME}/bin/sym"
+ENGINES_DIR="${SYMMETRIC_HOME}/engines"
+
 echo "=========================================="
 echo "SymmetricDS Master - Inicialización"
 echo "=========================================="
 echo "--> [$(date)] Host: ${DB_HOST}:${DB_PORT}"
 echo "--> [$(date)] Base de datos: ${DB_NAME}"
+echo "--> [$(date)] SymmetricDS Home: ${SYMMETRIC_HOME}"
 echo ""
+
+# Verificar que SymmetricDS existe
+if [ ! -f "$SYM_BIN" ]; then
+  echo "❌ SymmetricDS no encontrado en $SYM_BIN"
+  exit 1
+fi
+
+# Verificar que master.properties existe
+if [ ! -f "${ENGINES_DIR}/master.properties" ]; then
+  echo "❌ master.properties no encontrado en ${ENGINES_DIR}/"
+  echo "Contenido del directorio engines:"
+  ls -la ${ENGINES_DIR}/
+  exit 1
+fi
 
 echo "--> [$(date)] Esperando a PostgreSQL..."
 
@@ -42,7 +61,7 @@ if [ "$EXISTING_CONFIG" = "0" ] || [ -z "$EXISTING_CONFIG" ]; then
   echo "--> [$(date)] Primera inicialización detectada"
   echo "--> [$(date)] Iniciando SymmetricDS para crear esquema..."
 
-  /app/bin/sym --port 31415 --server &
+  $SYM_BIN --port 31415 --server &
   SYMMETRIC_PID=$!
 
   echo "PID de SymmetricDS: $SYMMETRIC_PID"
@@ -66,19 +85,18 @@ fi
 
 echo ""
 echo "=========================================="
-echo "Verificación de configuración"
+echo "Verificación de Configuración"
 echo "=========================================="
-
-# Verificar que master.properties tiene la URL correcta
-echo "📄 Contenido de master.properties:"
-grep "sync.url" /app/engines/master.properties || echo "⚠️  sync.url no encontrada en master.properties"
+echo "📄 URL de sincronización configurada en master.properties:"
+grep "sync.url" ${ENGINES_DIR}/master.properties
 echo ""
 
 echo "=========================================="
 echo "Iniciando SymmetricDS Master"
 echo "=========================================="
 echo "--> Puerto: 31415"
-echo "--> URL Configurada: http://31.97.240.232:31415/sync/master"
+echo "--> Grupo: master_group"
+echo "--> External ID: master_node"
 echo ""
 
-exec /app/bin/sym --port 31415 --server
+exec $SYM_BIN --port 31415 --server
