@@ -337,3 +337,21 @@ WHERE param_key IN (
                     'concurrent.workers'
     )
 ORDER BY node_group_id, param_key;
+
+-- Actualizar sync_url del nodo master a IP pública
+UPDATE sym_node
+SET sync_url = 'http://31.97.240.232:31415/sync/master'
+WHERE node_id = 'master_node';
+
+INSERT INTO sym_parameter (external_id, node_group_id, param_key, param_value, create_time, last_update_by, last_update_time)
+VALUES ('GLOBAL', 'master_group', 'sync.url', 'http://31.97.240.232:31415/sync/master', CURRENT_TIMESTAMP, 'system', CURRENT_TIMESTAMP)
+    ON CONFLICT (external_id, node_group_id, param_key) DO UPDATE
+                                                               SET param_value = EXCLUDED.param_value,
+                                                               last_update_time = CURRENT_TIMESTAMP;
+
+-- Configurar registration.url global
+INSERT INTO sym_parameter (external_id, node_group_id, param_key, param_value, create_time, last_update_by, last_update_time)
+VALUES ('GLOBAL', 'ALL', 'registration.url', 'http://31.97.240.232:31415/sync/master', CURRENT_TIMESTAMP, 'system', CURRENT_TIMESTAMP)
+    ON CONFLICT (external_id, node_group_id, param_key) DO UPDATE
+                                                               SET param_value = EXCLUDED.param_value,
+                                                               last_update_time = CURRENT_TIMESTAMP;
