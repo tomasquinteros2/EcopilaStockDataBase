@@ -8,6 +8,7 @@ import org.springframework.stereotype.Repository;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Stream;
@@ -77,4 +78,7 @@ public interface ProductoRepository extends JpaRepository<Producto, Long> , JpaS
     void eliminarRelacionesEnBloque(List<Long> ids);
 
     List<Producto> findAllByCostoFijoIsFalse();
+
+    @Query(value = "SELECT COALESCE(MAX(EXTRACT(EPOCH FROM updated_at)), 0) FROM producto", nativeQuery = true)
+    Long findMaxLastModifiedTimestamp();
 }

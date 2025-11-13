@@ -1,5 +1,8 @@
 package micro.microservicio_proveedor.services;
 
+import micro.microservicio_proveedor.entities.dto.LastModifiedDTO;
+import micro.microservicio_proveedor.events.CotizacionCambiadaEvent;
+import org.springframework.context.ApplicationEventPublisher;
 import jakarta.transaction.Transactional;
 import micro.microservicio_proveedor.entities.Proveedor;
 import micro.microservicio_proveedor.entities.dto.ProveedorMapper;
@@ -29,15 +32,16 @@ public class ProveedorService {
 
     private static final Logger log = LoggerFactory.getLogger(ProveedorService.class);
 
+    private final ApplicationEventPublisher eventPublisher;
     private final ProductoFeignClient productoFeignClient;
     private final ProveedorRepository proveedorRepository;
 
-    public ProveedorService(ProveedorRepository proveedorRepository,ProductoFeignClient productoFeignClient) {
+    public ProveedorService(ProveedorRepository proveedorRepository,ProductoFeignClient productoFeignClient,ApplicationEventPublisher eventPublisher) {
         this.proveedorRepository = proveedorRepository;
         this.productoFeignClient = productoFeignClient;
+        this.eventPublisher = eventPublisher;
     }
 
-    @Cacheable(value = "proveedores", unless = "#result == null || #result.isEmpty()")
     @Transactional
     public java.util.List<Proveedor> findAll() {
         log.info("Buscando todos los proveedores y sus detalles desde la BD.");
@@ -59,8 +63,8 @@ public class ProveedorService {
     }
 
     @Caching(evict = {
-            @CacheEvict(value = "proveedores", allEntries = true),
-            @CacheEvict(value = "proveedorDto", allEntries = true)
+            @CacheEvict(value = "proveedor", key = "#result.id"),
+            @CacheEvict(value = "proveedorDto", key = "#result.id")
     })
     @Transactional
     public Proveedor save(Proveedor proveedor) {
@@ -81,9 +85,10 @@ public class ProveedorService {
     }
 
     @Caching(
-            put = { @CachePut(value = "proveedor", key = "#id") },
+            put = {
+                    @CachePut(value = "proveedor", key = "#id")
+            },
             evict = {
-                    @CacheEvict(value = "proveedores", allEntries = true),
                     @CacheEvict(value = "proveedorDto", key = "#id")
             }
     )
@@ -113,13 +118,13 @@ public class ProveedorService {
 
         Proveedor proveedorActualizado = proveedorRepository.save(existente);
 
+        //em.flush();
+        //em.clear();
+
         if (cotizacionCambio) {
-            log.info("Cotización cambió para proveedor ID: {}. Notificando recalculo de precios.", id);
-            try {
-                productoFeignClient.recalcularPreciosPorProveedor(id);
-            } catch (Exception e) {
-                log.error("Error al notificar recalculo de precios para proveedor ID: {}", id, e);
-            }
+            log.info("Cotización cambió para proveedor ID: {}. Programando recalculo DESPUÉS del commit.", id);
+            // Publicar evento que se ejecutará DESPUÉS del commit
+            eventPublisher.publishEvent(new CotizacionCambiadaEvent(id, proveedorDetails.getValorCotizacionManual()));
         }
 
         log.info("Proveedor con ID {} actualizado correctamente.", id);
@@ -142,7 +147,6 @@ public class ProveedorService {
 
     @Caching(evict = {
             @CacheEvict(value = "proveedor", key = "#id"),
-            @CacheEvict(value = "proveedores", allEntries = true),
             @CacheEvict(value = "proveedorDto", key = "#id")
     })
     @Transactional
@@ -178,5 +182,11 @@ public class ProveedorService {
         }
         return existente.getValorCotizacionManual() == null ||
                 existente.getValorCotizacionManual().compareTo(nuevo.getValorCotizacionManual()) != 0;
+    }
+
+    @Transactional
+    public LastModifiedDTO getLastModified() {
+        Long timestamp = proveedorRepository.findMaxLastModifiedTimestamp();
+        return new LastModifiedDTO(timestamp != null ? timestamp : 0L);
     }
 }

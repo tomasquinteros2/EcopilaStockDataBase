@@ -1,8 +1,10 @@
 package micro.microservicio_proveedor.controller;
 
 import micro.microservicio_proveedor.entities.Proveedor;
+import micro.microservicio_proveedor.entities.dto.LastModifiedDTO;
 import micro.microservicio_proveedor.entities.dto.ProveedorResponseDTO;
 import micro.microservicio_proveedor.services.ProveedorService;
+import org.springframework.http.CacheControl;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -50,5 +52,12 @@ public class ProveedorController {
     public ResponseEntity<Void> validarProveedores(@RequestBody List<Long> ids) {
         proveedorService.validarExistencia(ids);
         return ResponseEntity.ok().build();
+    }
+    @GetMapping("/last-modified")
+    public ResponseEntity<LastModifiedDTO> getLastModified() {
+        LastModifiedDTO lastModified = proveedorService.getLastModified();
+        return ResponseEntity.ok()
+                .cacheControl(CacheControl.noCache())
+                .body(lastModified);
     }
 }

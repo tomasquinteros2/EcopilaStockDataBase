@@ -67,6 +67,10 @@ services:
       SPRING_PROFILES_ACTIVE: "offline"
       JWT_SECRET_KEY: "hRFxCC9ibkLnqP9Js9FiWRbCme1dbLPLIRzQVPKmhK/LscULomJ/flJJpUaZ+M9fa+hT0X4gpeileNbQJrEBrw=="
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: "http://eureka:8761/eureka"
+      GMAIL_USERNAME: "ecopilastockapp@gmail.com"
+      GMAIL_APP_PASSWORD: "zxgk uhso eyav ywui"
+      APPLICATION_INVITE_MANAGER_EMAIL: "tomas.quinteros2002@gmail.com"
+      APPLICATION_INVITE_FROM_EMAIL: "ecopilastockapp@gmail.com"
     depends_on:
       eureka:
         condition: service_healthy

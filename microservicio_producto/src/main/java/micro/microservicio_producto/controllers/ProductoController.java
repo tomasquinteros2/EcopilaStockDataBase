@@ -8,12 +8,15 @@ import micro.microservicio_producto.services.ProductoService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.CacheControl;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
+
+import java.math.BigDecimal;
 import java.util.List;
 
 @RestController
@@ -123,9 +126,16 @@ public class ProductoController {
     }
 
     @PutMapping("/recalcular-por-proveedor/{proveedorId}")
-    public ResponseEntity<String> recalcularPorProveedor(@PathVariable Long proveedorId) {
+    public ResponseEntity<String> recalcularPorProveedor(@PathVariable Long proveedorId,@RequestParam BigDecimal nuevaCotizacion) {
         log.info("Recalculando precios para productos del proveedor ID: {}", proveedorId);
-        productoService.recalcularPreciosPorProveedor(proveedorId);
+        productoService.recalcularPreciosPorProveedor(proveedorId,nuevaCotizacion);
         return ResponseEntity.ok("Precios recalculados exitosamente");
+    }
+    @GetMapping("/last-modified")
+    public ResponseEntity<LastModifiedDTO> getLastModified() {
+        LastModifiedDTO lastModified = productoService.getLastModified();
+        return ResponseEntity.ok()
+                .cacheControl(CacheControl.noCache())
+                .body(lastModified);
     }
 }

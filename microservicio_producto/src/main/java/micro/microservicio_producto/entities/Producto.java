@@ -12,6 +12,7 @@ import org.hibernate.annotations.OnDeleteAction;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -100,11 +101,26 @@ public class Producto {
     @ManyToMany(mappedBy = "productosRelacionados")
     private Set<Producto> relacionadoCon = new HashSet<>();
 
+    @Column(name = "created_at", nullable = false)
+    private LocalDateTime createdAt;
+
+    @Column(name = "updated_at", nullable = false)
+    private LocalDateTime updatedAt;
+
     @PrePersist
-    public void generarCodigoSiNulo() {
+    protected void onCreate() {
         if (this.codigoProducto == null || this.codigoProducto.trim().isEmpty()) {
             this.codigoProducto = "PROD-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
         }
+
+        LocalDateTime now = LocalDateTime.now();
+        createdAt = now;
+        updatedAt = now;
+    }
+
+    @PreUpdate
+    protected void onUpdate() {
+        updatedAt = LocalDateTime.now();
     }
 
     @JsonProperty("productosRelacionadosIds")
@@ -126,5 +142,6 @@ public class Producto {
         this.productosRelacionados.remove(producto);
         producto.getProductosRelacionados().remove(this);
     }
+
 
 }

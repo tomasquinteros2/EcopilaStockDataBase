@@ -5,7 +5,6 @@ spring:
   application:
     name: auth-service
   datasource:
-    # Apuntamos a la base de datos PostgreSQL del entorno offline
     url: jdbc:postgresql://postgres-db-offline:5432/ecopila_db_offline
     driver-class-name: org.postgresql.Driver
     username: admin
@@ -22,6 +21,7 @@ spring:
     enabled: true
     baseline-on-migrate: true
     table: flyway_schema_history_auth
+
 application:
   security:
     authentication:
@@ -29,6 +29,7 @@ application:
         base64-secret: ${JWT_SECRET_KEY}
         token-validity-in-seconds: 86400
         token-validity-in-seconds-for-remember-me: 2592000
+
 management:
   tracing:
     sampling:

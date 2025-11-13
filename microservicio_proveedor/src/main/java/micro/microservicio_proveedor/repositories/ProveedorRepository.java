@@ -18,4 +18,7 @@ public interface ProveedorRepository extends JpaRepository<Proveedor, Long> {
     @Override
     @EntityGraph(value = "proveedor-with-razones-cuentas", type = EntityGraph.EntityGraphType.LOAD)
     List<Proveedor> findAll();
+
+    @Query(value = "SELECT COALESCE(MAX(EXTRACT(EPOCH FROM updated_at)), 0) FROM proveedor", nativeQuery = true)
+    Long findMaxLastModifiedTimestamp();
 }

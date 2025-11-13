@@ -353,26 +353,8 @@ public class ProductoService {
     }
 
     @Transactional
-    public void recalcularPreciosPorProveedor(Long proveedorId) {
-        log.info("Recalculando precios para productos del proveedor ID: {}", proveedorId);
-
-        BigDecimal valorDolar;
-        try {
-            ProveedorDTO proveedor = proveedorClient.getProveedorById(proveedorId).getBody();
-            if (proveedor == null) {
-                throw new ResourceNotFoundException("Proveedor no encontrado con ID: " + proveedorId);
-            }
-
-            valorDolar = (proveedor.getValorCotizacionManual() != null
-                    && proveedor.getValorCotizacionManual().compareTo(BigDecimal.ZERO) > 0)
-                    ? proveedor.getValorCotizacionManual()
-                    : obtenerValorDolar();
-
-            log.info("Usando cotización {} para proveedor ID: {}", valorDolar, proveedorId);
-        } catch (Exception e) {
-            log.error("Error al obtener cotización del proveedor ID: {}. Usando valor oficial", proveedorId, e);
-            valorDolar = obtenerValorDolar();
-        }
+    public void recalcularPreciosPorProveedor(Long proveedorId,BigDecimal valorDolar) {
+        log.info("Recalculando con cotización forzada: {}", valorDolar);
 
         List<Producto> productos = productoRepository.findAll(
                 (root, query, cb) -> cb.and(
@@ -562,84 +544,6 @@ public class ProductoService {
         em.flush();
         em.clear();
     }
-    /*@Transactional
-    public void saveAllProducts(List<Producto> incomingProducts) {
-        if (incomingProducts == null || incomingProducts.isEmpty()) {
-            return;
-        }
-
-        Set<Long> proveedorIds = incomingProducts.stream()
-                .map(Producto::getProveedorId)
-                .filter(Objects::nonNull)
-                .collect(Collectors.toSet());
-
-        Set<Long> tipoProductoIds = incomingProducts.stream()
-                .map(Producto::getTipoProductoId)
-                .filter(Objects::nonNull)
-                .collect(Collectors.toSet());
-
-        if (!proveedorIds.isEmpty()) {
-            log.info("Validando {} IDs de proveedores en bloque.", proveedorIds.size());
-        }
-        if (!tipoProductoIds.isEmpty()) {
-            log.info("Validando {} IDs de tipos de producto en bloque.", tipoProductoIds.size());
-        }
-
-        BigDecimal valorDolar = obtenerValorDolar();
-        List<Producto> productsToPersist = new ArrayList<>();
-
-        Map<Long, ProveedorDTO> proveedoresCache = new HashMap<>();
-        for (Long proveedorId : proveedorIds) {
-            try {
-                ProveedorDTO proveedor = proveedorClient.getProveedorById(proveedorId).getBody();
-                if (proveedor != null) {
-                    proveedoresCache.put(proveedorId, proveedor);
-                }
-            } catch (FeignException e) {
-                log.error("No se pudo obtener el proveedor con ID {}. Causa: {}", proveedorId, e.getMessage());
-            }
-        }
-
-        for (Producto incomingProduct : incomingProducts) {
-            incomingProduct.setId(null);
-            log.info("Preparando nuevo producto con código {}", incomingProduct.getCodigo_producto());
-            incomingProduct.setFecha_ingreso(LocalDate.now());
-
-            if (incomingProduct.getCantidad() <= 0) {
-                incomingProduct.setCantidad(1);
-            }
-            if (incomingProduct.getIva() == null || incomingProduct.getIva().compareTo(BigDecimal.ZERO) <= 0) {
-                incomingProduct.setIva(new BigDecimal("0.21"));
-                log.warn("El producto con código {} no tenía IVA. Se asignó 21% por defecto.", incomingProduct.getCodigo_producto());
-            }
-            if (incomingProduct.getResto() == null || incomingProduct.getResto().compareTo(BigDecimal.ZERO) <= 0) {
-                incomingProduct.setResto(new BigDecimal("1000"));
-            }
-
-            BigDecimal valorDolarProducto = valorDolar;
-            if (incomingProduct.getProveedorId() != null) {
-                ProveedorDTO proveedor = proveedoresCache.get(incomingProduct.getProveedorId());
-                if (proveedor != null && proveedor.getValorCotizacionManual() != null
-                        && proveedor.getValorCotizacionManual().compareTo(BigDecimal.ZERO) > 0) {
-                    log.info("Usando cotización manual del proveedor ID {} para el producto {}", proveedor.getId(), incomingProduct.getCodigo_producto());
-                    valorDolarProducto = proveedor.getValorCotizacionManual();
-                }
-            }
-
-            if (!incomingProduct.isCostoFijo()) {
-                recalculatePrices(incomingProduct, valorDolarProducto);
-            } else {
-                calculateFixedCostPrices(incomingProduct);
-            }
-            productsToPersist.add(incomingProduct);
-        }
-
-        if (!productsToPersist.isEmpty()) {
-            log.info("Guardando {} productos en la base de datos en una sola operación.", productsToPersist.size());
-            productoRepository.saveAll(productsToPersist);
-            log.info("¡Carga masiva completada con éxito!");
-        }
-    }*/
     @Transactional
     public void deleteMultiple(List<Long> ids) {
         if (ids == null || ids.isEmpty()) {
@@ -650,5 +554,10 @@ public class ProductoService {
         log.info("Se eliminaron las relaciones: {}", ids);
         productoRepository.deleteAllById(ids);
         log.info("Se eliminaron los productos: {}", ids);
+    }
+    @Transactional(readOnly = true)
+    public LastModifiedDTO getLastModified() {
+        Long timestamp = productoRepository.findMaxLastModifiedTimestamp();
+        return new LastModifiedDTO(timestamp != null ? timestamp : 0L);
     }
 }

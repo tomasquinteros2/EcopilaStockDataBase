@@ -41,7 +41,7 @@ public class Usuario implements Serializable {
     private String password;
 
     @JsonIgnore
-    @ManyToMany(fetch = FetchType.EAGER) // EAGER para cargar autoridades con el usuario
+    @ManyToMany(fetch = FetchType.EAGER)
     @JoinTable(
             name = "usuario_authority",
             joinColumns = {@JoinColumn(name = "usuario_id", referencedColumnName = "id")},
@@ -51,10 +51,10 @@ public class Usuario implements Serializable {
     @Column(name = "totp_secret")
     private String totpSecret;
 
-    @Column(name = "two_factor_enabled")
+    @Column(name = "two_factor_enabled",nullable = false)
     private boolean twoFactorEnabled = false;
 
-    @Column(name = "account_verified")
+    @Column(name = "account_verified",nullable = false)
     private boolean accountVerified = false;
 
     public Usuario(String username, String password, Set<Authority> authorities) {

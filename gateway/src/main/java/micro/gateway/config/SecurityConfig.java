@@ -67,16 +67,17 @@ public class SecurityConfig {
                                 "/actuator/health", "/actuator/info").permitAll()
                         .pathMatchers(HttpMethod.POST, "/api/auth/login").permitAll()
                         .pathMatchers(HttpMethod.POST, "/api/auth/register/**").permitAll()
+                        .pathMatchers(HttpMethod.POST, "/api/auth/invite/**").permitAll()
                         .pathMatchers("/api/dolar/**").authenticated()
 
                         // --- Reglas para USER y ADMIN ---
                         // Permisos de LECTURA (GET)
-                        .pathMatchers(HttpMethod.GET, "/api/producto/productos/**").hasAnyAuthority(AuthorityConstant.USER, AuthorityConstant.ADMIN)
-                        .pathMatchers(HttpMethod.GET, "/api/producto/ventas/**").hasAnyAuthority(AuthorityConstant.USER, AuthorityConstant.ADMIN)
-                        .pathMatchers(HttpMethod.GET, "/api/tipo-producto/tiposproducto/**").hasAnyAuthority(AuthorityConstant.USER, AuthorityConstant.ADMIN)
-                        .pathMatchers(HttpMethod.GET, "/api/proveedor/proveedores/**").hasAnyAuthority(AuthorityConstant.USER, AuthorityConstant.ADMIN)
-                        .pathMatchers(HttpMethod.POST, "/api/producto/ventas/**").hasAnyAuthority(AuthorityConstant.USER, AuthorityConstant.ADMIN)
-                        .pathMatchers(HttpMethod.PUT, "/api/producto/productos/descontar").hasAnyAuthority(AuthorityConstant.USER, AuthorityConstant.ADMIN)
+                        .pathMatchers(HttpMethod.GET, "/api/producto/productos/**").hasAnyAuthority(AuthorityConstant.USER, AuthorityConstant.ADMIN,AuthorityConstant.VIEWER)
+                        .pathMatchers(HttpMethod.GET, "/api/producto/ventas/**").hasAnyAuthority(AuthorityConstant.USER, AuthorityConstant.ADMIN,AuthorityConstant.VIEWER)
+                        .pathMatchers(HttpMethod.GET, "/api/tipo-producto/tiposproducto/**").hasAnyAuthority(AuthorityConstant.USER, AuthorityConstant.ADMIN,AuthorityConstant.VIEWER)
+                        .pathMatchers(HttpMethod.GET, "/api/proveedor/proveedores/**").hasAnyAuthority(AuthorityConstant.USER, AuthorityConstant.ADMIN,AuthorityConstant.VIEWER)
+                        .pathMatchers(HttpMethod.POST, "/api/producto/ventas/**").hasAnyAuthority(AuthorityConstant.USER, AuthorityConstant.ADMIN,AuthorityConstant.VIEWER)
+                        .pathMatchers(HttpMethod.PUT, "/api/producto/productos/descontar").hasAnyAuthority(AuthorityConstant.USER, AuthorityConstant.ADMIN,AuthorityConstant.VIEWER)
 
                         // --- Reglas solo para ADMIN ---
                         // Permisos de ESCRITURA (POST, PUT, DELETE) para datos maestros
