@@ -237,10 +237,7 @@ VALUES
     ('ALL', 'ALL', 'sync.table.level.preview.enabled', 'true', now(), now()),
 
     -- Intervalos de Sincronización Optimizados
-    ('ALL', 'ALL', 'job.pull.period.time.ms', '5000', now(), now()),
-    ('ALL', 'ALL', 'job.push.period.time.ms', '5000', now(), now()),
     ('ALL', 'ALL', 'job.routing.period.time.ms', '3000', now(), now()),
-    ('ALL', 'ALL', 'job.heartbeat.period.time.ms', '10000', now(), now()),
 
     -- Workers Concurrentes
     ('ALL', 'master_group', 'concurrent.workers', '5', now(), now()),
@@ -253,18 +250,12 @@ VALUES
     -- Números en WHERE (PostgreSQL)
     ('ALL', 'ALL', 'db.quote.numbers.in.where.enabled', 'false', now(), now()),
 
-    -- Auto-registro y Carga Inicial
-    ('ALL', 'client_group', 'auto.registration', 'true', now(), now()),
-    ('ALL', 'client_group', 'initial.load.create.first', 'true', now(), now()),
-    ('ALL', 'client_group', 'initial.load.delete.first', 'true', now(), now()),
-
     -- Logging Detallado
     ('ALL', 'ALL', 'log.conflict.resolution', 'true', now(), now()),
     ('ALL', 'ALL', 'routing.log.stats.on.batch.error', 'true', now(), now()),
     ('ALL', 'ALL', 'db.log.sql', 'false', now(), now()),  -- Activar solo para debug
 
     -- Timeouts
-    ('ALL', 'ALL', 'http.timeout.ms', '300000', now(), now()),
     ('ALL', 'ALL', 'http.connection.timeout.ms', '30000', now(), now())
     ON CONFLICT (external_id, node_group_id, param_key) DO UPDATE SET
     param_value = EXCLUDED.param_value,
@@ -306,7 +297,116 @@ END IF;
 END $$;
 
 -- #####################################################################
--- 10. VERIFICACIÓN DE CONFIGURACIÓN
+-- 10. CONFIGURACIÓN DE RED Y URLS
+-- #####################################################################
+
+-- Actualizar sync_url del nodo master a IP pública
+UPDATE sym_node
+SET sync_url = 'http://31.97.240.232:31415/sync/master'
+WHERE node_id = 'master_node';
+
+INSERT INTO sym_parameter (external_id, node_group_id, param_key, param_value, create_time, last_update_by, last_update_time)
+VALUES ('GLOBAL', 'master_group', 'sync.url', 'http://31.97.240.232:31415/sync/master', CURRENT_TIMESTAMP, 'system', CURRENT_TIMESTAMP)
+    ON CONFLICT (external_id, node_group_id, param_key) DO UPDATE
+                                                               SET param_value = EXCLUDED.param_value,
+                                                               last_update_time = CURRENT_TIMESTAMP;
+
+-- Configurar registration.url global para que los clientes sepan dónde registrarse
+INSERT INTO sym_parameter (external_id, node_group_id, param_key, param_value, create_time, last_update_by, last_update_time)
+VALUES ('GLOBAL', 'ALL', 'registration.url', 'http://31.97.240.232:31415/sync/master', CURRENT_TIMESTAMP, 'system', CURRENT_TIMESTAMP)
+    ON CONFLICT (external_id, node_group_id, param_key) DO UPDATE
+                                                               SET param_value = EXCLUDED.param_value,
+                                                               last_update_time = CURRENT_TIMESTAMP;
+
+
+-- #####################################################################
+-- 11. GESTIÓN DE SINCRONIZACIÓN Y CLIENTES DESCONECTADOS (CONSOLIDADO)
+-- #####################################################################
+
+-- Esta sección unifica la configuración para el manejo de clientes offline,
+-- la retención de datos, y la resincronización automática para resolver
+-- inconsistencias y asegurar que los clientes reciban los datos perdidos.
+
+INSERT INTO sym_parameter (external_id, node_group_id, param_key, param_value, create_time, last_update_time)
+VALUES
+    -- === Retención de Datos (CRÍTICO) ===
+    -- Mantiene los datos y batches por 7 días (10080 min) en el master,
+    -- permitiendo que clientes desconectados se pongan al día.
+    ('ALL', 'master_group', 'purge.retention.minutes', '10080', now(), now()),
+
+    -- === Auto-Recarga para Clientes ===
+    -- Habilita la recarga automática para clientes que se reconectan.
+    ('ALL', 'client_group', 'auto.reload.enabled', 'true', now(), now()),
+    -- Fuerza una recarga completa si el cliente estuvo offline más de 60 minutos.
+    ('ALL', 'client_group', 'initial.load.force.reload.after.offline.minutes', '60', now(), now()),
+    -- Habilita la carga inicial para nuevos clientes.
+    ('ALL', 'client_group', 'initial.load.create.first', 'true', now(), now()),
+    ('ALL', 'client_group', 'initial.load.delete.first', 'false', now(), now()), -- No borrar datos existentes en el cliente.
+
+    -- === Detección de Nodos Offline ===
+    -- Frecuencia con la que se revisa si un nodo está vivo.
+    ('ALL', 'ALL', 'job.heartbeat.period.time.ms', '60000', now(), now()),
+    -- Tiempo sin heartbeat para considerar un nodo offline (60 minutos).
+    ('ALL', 'ALL', 'offline.node.detection.period.minutes', '60', now(), now()),
+    -- Mecanismo de detección.
+    ('ALL', 'ALL', 'node.offline.detection.type', 'heartbeat', now(), now()),
+
+    -- === Comportamiento de Push y Pull ===
+    -- El master intenta activamente enviar datos (push) cada 120 segundos.
+    ('ALL', 'master_group', 'push.period.time.ms', '120000', now(), now()),
+    -- El cliente busca activamente datos (pull) cada 5 segundos.
+    ('ALL', 'ALL', 'job.pull.period.time.ms', '5000', now(), now()),
+    -- No omitir batches para nodos offline, los acumula.
+    ('ALL', 'master_group', 'outgoing.batches.skip.by.node.offline', 'false', now(), now()),
+
+    -- === Prevención de Bucles de Sincronización ===
+    -- **CRÍTICO**: Evita que el master re-dispare triggers con datos que acaba de recibir.
+    ('MASTER', 'master_group', 'sync.triggers.fire.on.load', 'false', now(), now()),
+
+    -- === Timeouts y Rendimiento ===
+    -- Timeout extendido para clientes, útil durante cargas iniciales pesadas.
+    ('ALL', 'client_group', 'http.timeout.ms', '600000', now(), now()),
+    -- Timeout estándar para el master.
+    ('ALL', 'master_group', 'http.timeout.ms', '300000', now(), now()),
+    -- Habilitar compresión para reducir el uso de red.
+    ('ALL', 'master_group', 'http.compression', 'true', now(), now()),
+    -- Workers de push concurrentes en el master.
+    ('ALL', 'master_group', 'push.thread.per.server.count', '5', now(), now()),
+    -- Máximo de batches a enviar en una sola sesión de push.
+    ('ALL', 'master_group', 'push.maximum.number.of.batches.to.sync', '5000', now(), now()),
+
+    -- === Otros Parámetros de Sincronización ===
+    -- Habilitar auto-registro de clientes.
+    ('ALL', 'client_group', 'auto.registration', 'true', now(), now()),
+    -- Reintentar batches con error indefinidamente.
+    ('ALL', 'master_group', 'outgoing.batches.error.millis', '0', now(), now())
+
+ON CONFLICT (external_id, node_group_id, param_key) DO UPDATE SET
+    param_value = EXCLUDED.param_value,
+    last_update_time = now();
+
+-- #####################################################################
+-- 12. HABILITAR RECARGA EN CANALES Y ROUTERS
+-- #####################################################################
+
+-- Asegurar que los canales principales soporten recarga de datos.
+UPDATE sym_channel
+SET reload_flag = 1
+WHERE channel_id IN (
+    'config_channel', 'auth_channel', 'proveedor_channel',
+    'tipo_producto_channel', 'dolar_channel', 'producto_channel'
+);
+
+-- Habilitar Push en el router principal del master a los clientes.
+UPDATE sym_router
+SET sync_on_insert = 1,
+    sync_on_update = 1,
+    sync_on_delete = 1
+WHERE router_id = 'master_to_all_clients';
+
+
+-- #####################################################################
+-- 13. VERIFICACIÓN DE CONFIGURACIÓN
 -- #####################################################################
 -- Ejecuta estas queries para verificar que todo está OK
 
@@ -331,294 +431,11 @@ ORDER BY conflict_id;
 SELECT param_key, node_group_id, param_value
 FROM sym_parameter
 WHERE param_key IN (
-                    'routing.data.gap.detection.enabled',
-                    'job.push.period.time.ms',
-                    'job.pull.period.time.ms',
-                    'concurrent.workers'
+    'purge.retention.minutes',
+    'auto.reload.enabled',
+    'initial.load.force.reload.after.offline.minutes',
+    'sync.triggers.fire.on.load',
+    'job.push.period.time.ms',
+    'job.pull.period.time.ms'
     )
 ORDER BY node_group_id, param_key;
-
--- Actualizar sync_url del nodo master a IP pública
-UPDATE sym_node
-SET sync_url = 'http://31.97.240.232:31415/sync/master'
-WHERE node_id = 'master_node';
-
-INSERT INTO sym_parameter (external_id, node_group_id, param_key, param_value, create_time, last_update_by, last_update_time)
-VALUES ('GLOBAL', 'master_group', 'sync.url', 'http://31.97.240.232:31415/sync/master', CURRENT_TIMESTAMP, 'system', CURRENT_TIMESTAMP)
-    ON CONFLICT (external_id, node_group_id, param_key) DO UPDATE
-                                                               SET param_value = EXCLUDED.param_value,
-                                                               last_update_time = CURRENT_TIMESTAMP;
-
--- Configurar registration.url global
-INSERT INTO sym_parameter (external_id, node_group_id, param_key, param_value, create_time, last_update_by, last_update_time)
-VALUES ('GLOBAL', 'ALL', 'registration.url', 'http://31.97.240.232:31415/sync/master', CURRENT_TIMESTAMP, 'system', CURRENT_TIMESTAMP)
-    ON CONFLICT (external_id, node_group_id, param_key) DO UPDATE
-                                                               SET param_value = EXCLUDED.param_value,
-                                                               last_update_time = CURRENT_TIMESTAMP;
-
--- #####################################################################
--- 11. CONFIGURACIÓN PARA REDISTRIBUCIÓN DE CAMBIOS
--- #####################################################################
-
--- Permitir que el master re-dispare triggers cuando reciba datos
--- Esto permite que los cambios de un cliente se redistribuyan a otros clientes
-INSERT INTO sym_parameter (external_id, node_group_id, param_key, param_value, create_time, last_update_time)
-VALUES
-    ('MASTER', 'master_group', 'sync.triggers.fire.on.load', 'true', now(), now()),
-    ('MASTER', 'master_group', 'trigger.create.before.initial.load', 'true', now(), now()),
-    ('MASTER', 'master_group', 'routing.trigger.enabled', 'true', now(), now())
-    ON CONFLICT (external_id, node_group_id, param_key) DO UPDATE SET
-    param_value = EXCLUDED.param_value,
-    last_update_time = now();
-
--- #####################################################################
--- 12. SINCRONIZACIÓN INICIAL Y RE-SINCRONIZACIÓN
--- #####################################################################
-
-INSERT INTO sym_parameter (external_id, node_group_id, param_key, param_value, create_time, last_update_time)
-VALUES
-   -- Habilitar carga inicial automática para clientes nuevos/reconectados
-   ('ALL', 'client_group', 'initial.load.create.first', 'true', now(), now()),
-
-   -- Eliminar datos antiguos antes de cargar (evita duplicados)
-   ('ALL', 'client_group', 'initial.load.delete.first', 'false', now(), now()),
-
-   -- Usar carga inicial reversa (del master hacia el cliente)
-   ('ALL', 'client_group', 'initial.load.use.extract.job', 'true', now(), now()),
-
-   -- Número de días que se guardan los cambios pendientes
-   ('ALL', 'master_group', 'purge.retention.minutes', '10080', now(), now()), -- 7 días
-
-   -- Habilitar auto-registro de clientes
-   ('ALL', 'client_group', 'auto.registration', 'true', now(), now()),
-
-   -- Tiempo que se mantienen los batches pendientes
-   ('ALL', 'master_group', 'outgoing.batches.peek.ahead.window.after.max.size', '100', now(), now()),
-
-   -- Reintentos para batches fallidos
-   ('ALL', 'master_group', 'push.thread.per.server.count', '5', now(), now()),
-   ('ALL', 'master_group', 'push.maximum.number.of.batches.to.sync', '1000', now(), now())
-ON CONFLICT (external_id, node_group_id, param_key) DO UPDATE SET
-    param_value = EXCLUDED.param_value,
-    last_update_time = now();
-
-
--- #####################################################################
--- 13. RESINCRONIZACIÓN AUTOMÁTICA DE CLIENTES DESCONECTADOS
--- #####################################################################
-
--- Parámetros para detección automática de clientes offline
-INSERT INTO sym_parameter (external_id, node_group_id, param_key, param_value, create_time, last_update_time)
-VALUES
-    -- Detectar automáticamente clientes desconectados (30 minutos sin heartbeat)
-    ('ALL', 'ALL', 'offline.node.detection.period.minutes', '30', now(), now()),
-
-    -- Habilitar reload automático al reconectar
-    ('ALL', 'client_group', 'auto.reload.enabled', 'true', now(), now()),
-
-    -- Reverificar clientes cada 5 minutos
-    ('ALL', 'master_group', 'job.offline.push.period.time.ms', '300000', now(), now()),
-
-    -- Mantener batches pendientes hasta que el cliente se reconecte
-    ('ALL', 'master_group', 'outgoing.error.override.suspended.channels', 'false', now(), now()),
-
-    -- Reenviar automáticamente batches pendientes al reconectar
-    ('ALL', 'master_group', 'auto.sync.triggers.at.startup.enabled', 'true', now(), now()),
-
-    -- Timeout extendido para clientes lentos/reconectando
-    ('ALL', 'client_group', 'http.timeout.ms', '600000', now(), now()),
-
-    -- Mantener datos de sync por 7 días (para clientes que estuvieron mucho tiempo offline)
-    ('ALL', 'master_group', 'purge.retention.minutes', '10080', now(), now()),
-
-    -- No purgar batches con error (permite reintentos indefinidos)
-    ('ALL', 'master_group', 'outgoing.batches.error.millis', '0', now(), now()),
-
-    -- Reintentar envío de batches cada 2 minutos
-    ('ALL', 'master_group', 'push.period.time.ms', '120000', now(), now()),
-
-    -- Máximo número de batches a sincronizar en una sola sesión
-    ('ALL', 'master_group', 'push.maximum.number.of.batches.to.sync', '5000', now(), now()),
-
-    -- Habilitar seguimiento de estado de nodos
-    ('ALL', 'ALL', 'node.offline.detection.type', 'heartbeat', now(), now()),
-
-    -- Forzar reload completo si el cliente estuvo offline más de 1 hora
-    ('ALL', 'client_group', 'initial.load.force.reload.after.offline.minutes', '60', now(), now()),
-
-    -- Activar estadísticas de nodos para monitoreo
-    ('ALL', 'ALL', 'statistic.record.enable', 'true', now(), now()),
-
-    -- Habilitar heartbeat más frecuente para detección rápida
-    ('ALL', 'ALL', 'job.heartbeat.period.time.ms', '60000', now(), now())
-    ON CONFLICT (external_id, node_group_id, param_key) DO UPDATE SET
-    param_value = EXCLUDED.param_value,
-    last_update_time = now();
-
--- Configuración específica de canales para reload automático
-UPDATE sym_channel
-SET reload_flag = 1
-WHERE channel_id IN (
-                     'config_channel',
-                     'auth_channel',
-                     'proveedor_channel',
-                     'tipo_producto_channel',
-                     'dolar_channel',
-                     'producto_channel'
-    );
-
--- Asegurar que los routers permitan reload
-UPDATE sym_router
-SET use_source_catalog_schema = 0
-WHERE router_id IN ('master_to_all_clients', 'client_to_master');
-
--- Parámetros adicionales para manejo de clientes offline
-INSERT INTO sym_parameter (external_id, node_group_id, param_key, param_value, create_time, last_update_time)
-VALUES
-    -- Permitir que el master acumule cambios indefinidamente
-    ('ALL', 'master_group', 'outgoing.batches.max.to.send', '10000', now(), now()),
-
-    -- Comprimir datos para clientes con mucho backlog
-    ('ALL', 'master_group', 'transport.type', 'http', now(), now()),
-    ('ALL', 'master_group', 'http.compression', 'true', now(), now()),
-
-    -- Priorizar canales críticos en reload
-    ('ALL', 'client_group', 'initial.load.reverse.first', 'true', now(), now()),
-
-    -- No fallar si hay conflictos durante reload
-    ('ALL', 'client_group', 'conflict.detect.on.reload', 'false', now(), now())
-    ON CONFLICT (external_id, node_group_id, param_key) DO UPDATE SET
-    param_value = EXCLUDED.param_value,
-    last_update_time = now();
--- #####################################################################
--- 14. PREVENCIÓN DE DUPLICADOS EN RECONEXIÓN (CORREGIDO)
--- #####################################################################
-
-DELETE FROM sym_parameter
-WHERE param_key = 'routing.ignore.duplicate.batch.inserts';
-
-INSERT INTO sym_parameter (external_id, node_group_id, param_key, param_value, create_time, last_update_time)
-VALUES
-    -- **CRÍTICO**: Desactivar re-disparo de triggers en master
-    ('MASTER', 'master_group', 'sync.triggers.fire.on.load', 'false', now(), now()),
-
-    -- Detectar gaps en routing de manera más conservadora
-    ('ALL', 'master_group', 'routing.data.reader.type', 'default', now(), now()),
-    ('ALL', 'master_group', 'routing.peek.ahead.memory.threshold', '1073741824', now(), now()),
-
-    -- Usar transacciones para evitar inserts duplicados
-    ('ALL', 'master_group', 'db.tx.timeout.seconds', '300', now(), now()),
-    ('ALL', 'master_group', 'db.query.timeout.seconds', '300', now(), now()),
-
-    -- Evitar re-enrutamiento de datos procesados
-    ('ALL', 'master_group', 'routing.stale.data.id.gap.time.ms', '7200000', now(), now()),
-    ('ALL', 'master_group', 'routing.peek.ahead.window.after.max.size', '1000', now(), now()),
-
-    -- Purgar datos antiguos más agresivamente
-    ('ALL', 'master_group', 'job.purge.period.time.ms', '300000', now(), now()),
-    ('ALL', 'master_group', 'purge.data.event.age.minutes', '30', now(), now()),
-    ('ALL', 'master_group', 'purge.stats.age.minutes', '60', now(), now()),
-
-    -- Consolidar batches para reducir volumen
-    ('ALL', 'master_group', 'routing.flush.jdbc.batch.size', '1000', now(), now()),
-    ('ALL', 'master_group', 'routing.max.gap.changes', '1000', now(), now()),
-
-    -- Desactivar procesamiento paralelo de routing (evita race conditions)
-    ('ALL', 'master_group', 'routing.concurrent.threads', '1', now(), now())
-    ON CONFLICT (external_id, node_group_id, param_key) DO UPDATE SET
-    param_value = EXCLUDED.param_value,
-    last_update_time = now();
-
--- #####################################################################
--- 15. LÍMITE DE BACKLOG Y AUTO-RELOAD
--- #####################################################################
-
-INSERT INTO sym_parameter (external_id, node_group_id, param_key, param_value, create_time, last_update_time)
-VALUES
-    -- Límite de batches en cola antes de forzar reload
-    ('ALL', 'master_group', 'auto.reload.reverse.enabled', 'true', now(), now()),
-    ('ALL', 'master_group', 'auto.reload.reverse.threshold.batches', '1000', now(), now()),
-
-    -- Purgar batches completados más frecuentemente
-    ('ALL', 'master_group', 'purge.outgoing.cron', '0 */15 * * * *', now(), now()),
-    ('ALL', 'master_group', 'purge.retention.minutes', '1440', now(), now()),
-
-    -- No acumular infinitamente para clientes offline
-    ('ALL', 'master_group', 'offline.node.detection.period.minutes', '60', now(), now()),
-    ('ALL', 'master_group', 'offline.incoming.dir', '/tmp/symmetric-offline', now(), now()),
-
-    -- Comprimir datos para reducir tamaño de backlog
-    ('ALL', 'master_group', 'http.compression', 'true', now(), now()),
-    ('ALL', 'master_group', 'transport.http.use.compression.client', 'true', now(), now()),
-
-    -- Desactivar peek-ahead (causa duplicados)
-    ('ALL', 'master_group', 'routing.peek.ahead.enabled', 'false', now(), now()),
-
-    -- Timeout extendido para clientes con mucho backlog
-    ('ALL', 'client_group', 'http.timeout.ms', '600000', now(), now()),
-    ('ALL', 'client_group', 'http.connection.timeout.ms', '60000', now(), now())
-    ON CONFLICT (external_id, node_group_id, param_key) DO UPDATE SET
-    param_value = EXCLUDED.param_value,
-    last_update_time = now();
-
--- Configurar reload automático por tabla
-UPDATE sym_channel
-SET reload_flag = 1,
-    max_data_to_route = 10000
-WHERE channel_id IN (
-                     'config_channel',
-                     'auth_channel',
-                     'proveedor_channel',
-                     'tipo_producto_channel',
-                     'dolar_channel',
-                     'producto_channel'
-    );
-
--- #####################################################################
--- 16. CONFIGURACIÓN PARA PUSH ACTIVO A CLIENTES OFFLINE
--- #####################################################################
-
-INSERT INTO sym_parameter (external_id, node_group_id, param_key, param_value, create_time, last_update_time)
-VALUES
-    -- **CRÍTICO**: Habilitar Push activo desde master
-    ('ALL', 'master_group', 'push.thread.per.server.count', '5', now(), now()),
-    ('ALL', 'master_group', 'push.period.time.ms', '5000', now(), now()),
-
-    -- Enviar batches pendientes al reconectar
-    ('ALL', 'master_group', 'push.maximum.number.of.batches.to.sync', '5000', now(), now()),
-
-    -- No esperar ACK del cliente (push asíncrono)
-    ('ALL', 'master_group', 'push.force.parameter.set', 'false', now(), now()),
-
-    -- Reintentar batches con error cada 2 minutos
-    ('ALL', 'master_group', 'transport.error.wait.seconds', '120', now(), now()),
-
-    -- Enviar batches aunque el cliente no haya hecho pull
-    ('ALL', 'master_group', 'outgoing.batches.skip.by.node.offline', 'false', now(), now()),
-
-    -- Habilitar estadísticas de push
-    ('ALL', 'master_group', 'statistic.record.enable', 'true', now(), now()),
-
-    -- Timeout extendido para clientes lentos
-    ('ALL', 'master_group', 'http.timeout.ms', '300000', now(), now()),
-
-    -- Permitir múltiples workers de push simultáneos
-    ('ALL', 'master_group', 'concurrent.workers', '5', now(), now()),
-
-    -- Enviar batches viejos primero (FIFO)
-    ('ALL', 'master_group', 'outgoing.batches.peek.ahead.batch.commit.size', '100', now(), now())
-    ON CONFLICT (external_id, node_group_id, param_key) DO UPDATE SET
-    param_value = EXCLUDED.param_value,
-                                                               last_update_time = now();
-
--- Habilitar Push en los routers
-UPDATE sym_router
-SET sync_on_insert = 1,
-    sync_on_update = 1,
-    sync_on_delete = 1
-WHERE router_id = 'master_to_all_clients';
-
--- Forzar reload de configuración de jobs
-UPDATE sym_parameter
-SET last_update_time = now()
-WHERE param_key IN ('push.period.time.ms', 'push.thread.per.server.count');
