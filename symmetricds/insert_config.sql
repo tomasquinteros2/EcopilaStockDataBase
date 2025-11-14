@@ -530,24 +530,46 @@ VALUES
     last_update_time = now();
 
 -- #####################################################################
--- 15. LÍMITE DE BACKLOG PARA CLIENTES OFFLINE
+-- 15. LÍMITE DE BACKLOG Y AUTO-RELOAD
 -- #####################################################################
 
 INSERT INTO sym_parameter (external_id, node_group_id, param_key, param_value, create_time, last_update_time)
 VALUES
-    -- Máximo de batches pendientes por cliente (evitar acumulación infinita)
-    ('ALL', 'master_group', 'outgoing.batches.max.to.queue', '500', now(), now()),
-
-    -- Después de 500 batches, forzar reload en lugar de queue
+    -- Límite de batches en cola antes de forzar reload
     ('ALL', 'master_group', 'auto.reload.reverse.enabled', 'true', now(), now()),
-    ('ALL', 'master_group', 'auto.reload.threshold.batches', '500', now(), now()),
+    ('ALL', 'master_group', 'auto.reload.reverse.threshold.batches', '1000', now(), now()),
 
-    -- Purgar batches viejos más agresivamente
-    ('ALL', 'master_group', 'purge.outgoing.cron', '0 */30 * * * *', now(), now()),
-    ('ALL', 'master_group', 'purge.data.event.age.minutes', '60', now(), now()),
+    -- Purgar batches completados más frecuentemente
+    ('ALL', 'master_group', 'purge.outgoing.cron', '0 */15 * * * *', now(), now()),
+    ('ALL', 'master_group', 'purge.retention.minutes', '1440', now(), now()),
 
-    -- Consolidar batches pequeños
-    ('ALL', 'master_group', 'routing.data.gap.fast.detect.boundaries', 'false', now(), now())
+    -- No acumular infinitamente para clientes offline
+    ('ALL', 'master_group', 'offline.node.detection.period.minutes', '60', now(), now()),
+    ('ALL', 'master_group', 'offline.incoming.dir', '/tmp/symmetric-offline', now(), now()),
+
+    -- Comprimir datos para reducir tamaño de backlog
+    ('ALL', 'master_group', 'http.compression', 'true', now(), now()),
+    ('ALL', 'master_group', 'transport.http.use.compression.client', 'true', now(), now()),
+
+    -- Desactivar peek-ahead (causa duplicados)
+    ('ALL', 'master_group', 'routing.peek.ahead.enabled', 'false', now(), now()),
+
+    -- Timeout extendido para clientes con mucho backlog
+    ('ALL', 'client_group', 'http.timeout.ms', '600000', now(), now()),
+    ('ALL', 'client_group', 'http.connection.timeout.ms', '60000', now(), now())
     ON CONFLICT (external_id, node_group_id, param_key) DO UPDATE SET
     param_value = EXCLUDED.param_value,
     last_update_time = now();
+
+-- Configurar reload automático por tabla
+UPDATE sym_channel
+SET reload_flag = 1,
+    max_data_to_route = 10000
+WHERE channel_id IN (
+                     'config_channel',
+                     'auth_channel',
+                     'proveedor_channel',
+                     'tipo_producto_channel',
+                     'dolar_channel',
+                     'producto_channel'
+    );
