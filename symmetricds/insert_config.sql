@@ -489,4 +489,4 @@ VALUES
     ('ALL', 'client_group', 'conflict.detect.on.reload', 'false', now(), now())
     ON CONFLICT (external_id, node_group_id, param_key) DO UPDATE SET
     param_value = EXCLUDED.param_value,
-                                                               last_update_time = now();
+    last_update_time = now();
