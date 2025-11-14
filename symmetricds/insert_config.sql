@@ -237,7 +237,7 @@ VALUES
     ('ALL', 'ALL', 'sync.table.level.preview.enabled', 'true', now(), now()),
 
     -- Intervalos de Sincronización Optimizados
-    ('ALL', 'ALL', 'job.routing.period.time.ms', '3000', now(), now()),
+    ('ALL', 'ALL', 'job.routing.period.time.ms', '10000', now(), now()),
 
     -- Workers Concurrentes
     ('ALL', 'master_group', 'concurrent.workers', '5', now(), now()),
@@ -355,7 +355,7 @@ VALUES
     -- El master intenta activamente enviar datos (push) cada 120 segundos.
     ('ALL', 'master_group', 'push.period.time.ms', '120000', now(), now()),
     -- El cliente busca activamente datos (pull) cada 10 segundos para reducir la carga.
-    ('ALL', 'ALL', 'job.pull.period.time.ms', '5000', now(), now()),
+    ('ALL', 'ALL', 'job.pull.period.time.ms', '30000', now(), now()),
     -- No omitir batches para nodos offline, los acumula.
     ('ALL', 'master_group', 'outgoing.batches.skip.by.node.offline', 'false', now(), now()),
 
