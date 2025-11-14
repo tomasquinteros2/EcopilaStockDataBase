@@ -355,3 +355,22 @@ VALUES ('GLOBAL', 'ALL', 'registration.url', 'http://31.97.240.232:31415/sync/ma
     ON CONFLICT (external_id, node_group_id, param_key) DO UPDATE
                                                                SET param_value = EXCLUDED.param_value,
                                                                last_update_time = CURRENT_TIMESTAMP;
+
+-- #####################################################################
+-- 11. CONFIGURACIÓN PARA REDISTRIBUCIÓN DE CAMBIOS
+-- #####################################################################
+
+-- Permitir que el master re-dispare triggers cuando reciba datos
+-- Esto permite que los cambios de un cliente se redistribuyan a otros clientes
+INSERT INTO sym_parameter (external_id, node_group_id, param_key, param_value, create_time, last_update_time)
+VALUES
+    ('MASTER', 'master_group', 'sync.triggers.fire.on.load', 'true', now(), now()),
+
+    -- Asegurar que los triggers se evalúen durante el proceso de carga
+    ('MASTER', 'master_group', 'trigger.create.before.initial.load', 'true', now(), now()),
+
+    -- Habilitar el enrutamiento después de aplicar cambios recibidos
+    ('MASTER', 'master_group', 'routing.trigger.enabled', 'true', now(), now())
+    ON CONFLICT (external_id, node_group_id, param_key) DO UPDATE SET
+    param_value = EXCLUDED.param_value,
+                                                               last_update_time = now();
