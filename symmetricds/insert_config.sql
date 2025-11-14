@@ -365,14 +365,11 @@ VALUES ('GLOBAL', 'ALL', 'registration.url', 'http://31.97.240.232:31415/sync/ma
 INSERT INTO sym_parameter (external_id, node_group_id, param_key, param_value, create_time, last_update_time)
 VALUES
     ('MASTER', 'master_group', 'sync.triggers.fire.on.load', 'true', now(), now()),
-
-    -- Asegurar que los triggers se evalúen durante el proceso de carga
     ('MASTER', 'master_group', 'trigger.create.before.initial.load', 'true', now(), now()),
-
-    -- Habilitar el enrutamiento después de aplicar cambios recibidos
     ('MASTER', 'master_group', 'routing.trigger.enabled', 'true', now(), now())
     ON CONFLICT (external_id, node_group_id, param_key) DO UPDATE SET
     param_value = EXCLUDED.param_value,
+    last_update_time = now();
 
 -- #####################################################################
 -- 12. SINCRONIZACIÓN INICIAL Y RE-SINCRONIZACIÓN
@@ -460,8 +457,7 @@ VALUES
 
 -- Configuración específica de canales para reload automático
 UPDATE sym_channel
-SET reload_flag = 1,
-    data_loader_enabled = 1
+SET reload_flag = 1
 WHERE channel_id IN (
                      'config_channel',
                      'auth_channel',
@@ -473,8 +469,7 @@ WHERE channel_id IN (
 
 -- Asegurar que los routers permitan reload
 UPDATE sym_router
-SET use_source_catalog_schema = 0,
-    sync_on_incoming_batch = 1
+SET use_source_catalog_schema = 0
 WHERE router_id IN ('master_to_all_clients', 'client_to_master');
 
 -- Parámetros adicionales para manejo de clientes offline
