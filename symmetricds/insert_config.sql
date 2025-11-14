@@ -223,9 +223,9 @@ VALUES
      NULL, now(), now())
     ON CONFLICT (conflict_id) DO UPDATE SET
     detect_type = EXCLUDED.detect_type,
-                                     resolve_type = EXCLUDED.resolve_type,
-                                     ping_back = EXCLUDED.ping_back,
-                                     last_update_time = now();
+    resolve_type = EXCLUDED.resolve_type,
+    ping_back = EXCLUDED.ping_back,
+    last_update_time = now();
 
 -- #####################################################################
 -- 8. PARÁMETROS DE RENDIMIENTO
@@ -268,7 +268,7 @@ VALUES
     ('ALL', 'ALL', 'http.connection.timeout.ms', '30000', now(), now())
     ON CONFLICT (external_id, node_group_id, param_key) DO UPDATE SET
     param_value = EXCLUDED.param_value,
-                                                               last_update_time = now();
+    last_update_time = now();
 
 -- #####################################################################
 -- 9. AGREGAR COLUMNA DE CONTROL (OPCIONAL PERO RECOMENDADO)
@@ -401,7 +401,7 @@ VALUES
 ON CONFLICT (external_id, node_group_id, param_key) DO UPDATE SET
     param_value = EXCLUDED.param_value,
     last_update_time = now();
-    last_update_time = now();
+
 
 -- #####################################################################
 -- 13. RESINCRONIZACIÓN AUTOMÁTICA DE CLIENTES DESCONECTADOS
