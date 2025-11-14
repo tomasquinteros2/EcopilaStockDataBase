@@ -172,6 +172,19 @@ VALUES
                                                enabled = 1,
                                                last_update_time = now();
 
+-- ==================== DESACTIVAR SYNC DE PARÁMETROS PARA MASTER ====================
+-- CRÍTICO: Evita que el master entre en un bucle de recarga de configuración.
+-- El master no necesita sincronizar sus propios cambios de parámetros.
+INSERT INTO sym_trigger (trigger_id, source_schema_name, source_table_name, channel_id, sync_on_update, sync_on_insert, sync_on_delete, last_update_time, create_time)
+VALUES ('sym_parameter_master_ignore', 'public', 'sym_parameter', 'config', 1, 1, 1, now(), now())
+ON CONFLICT (trigger_id) DO NOTHING;
+
+INSERT INTO sym_trigger_router (trigger_id, router_id, initial_load_order, enabled, last_update_time, create_time)
+VALUES ('sym_parameter_master_ignore', 'master_to_all_clients', 999, 0, now(), now()) -- enabled = 0 DESACTIVA el enrutamiento para el master
+ON CONFLICT (trigger_id, router_id) DO UPDATE SET
+    enabled = 0,
+    last_update_time = now();
+
 -- #####################################################################
 -- 7. RESOLUCIÓN DE CONFLICTOS
 -- #####################################################################
