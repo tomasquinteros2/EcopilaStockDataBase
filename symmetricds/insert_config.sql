@@ -337,10 +337,10 @@ VALUES
     -- === Auto-Recarga para Clientes ===
     -- Habilita la recarga automática para clientes que se reconectan.
     ('ALL', 'client_group', 'auto.reload.enabled', 'true', now(), now()),
-    -- Fuerza una recarga completa si el cliente estuvo offline más de 60 minutos.
-    ('ALL', 'client_group', 'initial.load.force.reload.after.offline.minutes', '60', now(), now()),
     -- Habilita la carga inicial para nuevos clientes.
     ('ALL', 'client_group', 'initial.load.create.first', 'true', now(), now()),
+    -- Fuerza una recarga si el cliente estuvo offline por más de 60 minutos.
+    ('ALL', 'client_group', 'initial.load.after.offline.minutes', '60', now(), now()),
     ('ALL', 'client_group', 'initial.load.delete.first', 'false', now(), now()), -- No borrar datos existentes en el cliente.
 
     -- === Detección de Nodos Offline ===
@@ -354,7 +354,7 @@ VALUES
     -- === Comportamiento de Push y Pull ===
     -- El master intenta activamente enviar datos (push) cada 120 segundos.
     ('ALL', 'master_group', 'push.period.time.ms', '120000', now(), now()),
-    -- El cliente busca activamente datos (pull) cada 5 segundos.
+    -- El cliente busca activamente datos (pull) cada 10 segundos para reducir la carga.
     ('ALL', 'ALL', 'job.pull.period.time.ms', '5000', now(), now()),
     -- No omitir batches para nodos offline, los acumula.
     ('ALL', 'master_group', 'outgoing.batches.skip.by.node.offline', 'false', now(), now()),
