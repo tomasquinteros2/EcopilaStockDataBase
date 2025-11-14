@@ -491,40 +491,43 @@ VALUES
     param_value = EXCLUDED.param_value,
     last_update_time = now();
 -- #####################################################################
--- 14. PREVENCIÓN DE DUPLICADOS EN RECONEXIÓN
+-- 14. PREVENCIÓN DE DUPLICADOS EN RECONEXIÓN (CORREGIDO)
 -- #####################################################################
 
--- Desactivar re-enrutamiento de datos ya procesados
+DELETE FROM sym_parameter
+WHERE param_key = 'routing.ignore.duplicate.batch.inserts';
+
 INSERT INTO sym_parameter (external_id, node_group_id, param_key, param_value, create_time, last_update_time)
 VALUES
-    -- Evitar que el router procese data_events duplicados
-    ('ALL', 'master_group', 'routing.data.reader.type.gap.retention.minutes', '1440', now(), now()),
-    ('ALL', 'master_group', 'routing.peek.ahead.window.enabled', 'true', now(), now()),
+    -- **CRÍTICO**: Desactivar re-disparo de triggers en master
+    ('MASTER', 'master_group', 'sync.triggers.fire.on.load', 'false', now(), now()),
 
-    -- No reintentar batches que ya fueron exitosos
-    ('ALL', 'master_group', 'outgoing.error.override', 'false', now(), now()),
+    -- Detectar gaps en routing de manera más conservadora
+    ('ALL', 'master_group', 'routing.data.reader.type', 'default', now(), now()),
+    ('ALL', 'master_group', 'routing.peek.ahead.memory.threshold', '1073741824', now(), now()),
 
-    -- Prevenir duplicados en sym_data_event
-    ('ALL', 'master_group', 'routing.ignore.duplicate.batch.inserts', 'true', now(), now()),
+    -- Usar transacciones para evitar inserts duplicados
+    ('ALL', 'master_group', 'db.tx.timeout.seconds', '300', now(), now()),
+    ('ALL', 'master_group', 'db.query.timeout.seconds', '300', now(), now()),
 
-    -- No crear nuevos batches para datos ya enrutados
-    ('ALL', 'master_group', 'routing.stale.data.id.gap.time.ms', '600000', now(), now()),
+    -- Evitar re-enrutamiento de datos procesados
+    ('ALL', 'master_group', 'routing.stale.data.id.gap.time.ms', '7200000', now(), now()),
+    ('ALL', 'master_group', 'routing.peek.ahead.window.after.max.size', '1000', now(), now()),
 
-    -- Limpiar datos obsoletos más frecuentemente
+    -- Purgar datos antiguos más agresivamente
     ('ALL', 'master_group', 'job.purge.period.time.ms', '300000', now(), now()),
-    ('ALL', 'master_group', 'purge.data.event.age.minutes', '60', now(), now()),
+    ('ALL', 'master_group', 'purge.data.event.age.minutes', '30', now(), now()),
+    ('ALL', 'master_group', 'purge.stats.age.minutes', '60', now(), now()),
 
-    -- **CRÍTICO**: No volver a disparar triggers en el master cuando recibe cambios
-    ('MASTER', 'master_group', 'sync.triggers.fire.on.load', 'false', now(), now())
+    -- Consolidar batches para reducir volumen
+    ('ALL', 'master_group', 'routing.flush.jdbc.batch.size', '1000', now(), now()),
+    ('ALL', 'master_group', 'routing.max.gap.changes', '1000', now(), now()),
+
+    -- Desactivar procesamiento paralelo de routing (evita race conditions)
+    ('ALL', 'master_group', 'routing.concurrent.threads', '1', now(), now())
     ON CONFLICT (external_id, node_group_id, param_key) DO UPDATE SET
     param_value = EXCLUDED.param_value,
     last_update_time = now();
-
--- Asegurar que los data_events antiguos se limpien
-UPDATE sym_parameter
-SET param_value = '60'
-WHERE param_key = 'purge.data.event.age.minutes'
-  AND node_group_id = 'master_group';
 
 -- #####################################################################
 -- 15. LÍMITE DE BACKLOG PARA CLIENTES OFFLINE
