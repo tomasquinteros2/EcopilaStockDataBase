@@ -453,7 +453,7 @@ VALUES
     ('ALL', 'ALL', 'job.heartbeat.period.time.ms', '60000', now(), now())
     ON CONFLICT (external_id, node_group_id, param_key) DO UPDATE SET
     param_value = EXCLUDED.param_value,
-                                                               last_update_time = now();
+    last_update_time = now();
 
 -- Configuración específica de canales para reload automático
 UPDATE sym_channel
