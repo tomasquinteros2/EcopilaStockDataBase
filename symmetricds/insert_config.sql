@@ -356,6 +356,10 @@ VALUES
     -- **CRÍTICO**: Evita que el master re-dispare triggers con datos que acaba de recibir.
     ('MASTER', 'master_group', 'sync.triggers.fire.on.load', 'false', now(), now()),
 
+    -- === ESTABILIDAD DEL MASTER (NUEVO Y CRÍTICO) ===
+    -- Evita que el master enrute cambios de sus propias tablas de configuración.
+    ('ALL', 'master_group', 'start.route.job.after.sync.triggers.minutes', '-1', now(), now()),
+
     -- === Timeouts y Rendimiento ===
     -- Timeout extendido para clientes, útil durante cargas iniciales pesadas.
     ('ALL', 'client_group', 'http.timeout.ms', '600000', now(), now()),
