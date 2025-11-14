@@ -179,6 +179,9 @@ services:
     environment:
       - JAVA_OPTS=-Xmx512m -Dh2.baseDir=/app
       - INSTANCE_ID=${INSTANCE_ID:-1}
+      - SYMMETRIC_ROUTING_IGNORE_DUPLICATE_BATCH_INSERTS=true
+    volumes:
+      - symmetricds-client-data:/app/data
     depends_on:
       producto-service:
         condition: service_healthy
@@ -208,3 +211,4 @@ volumes:
   eureka-data:
   redis-data:
   offline-db-volume:
+  symmetricds-client-data:

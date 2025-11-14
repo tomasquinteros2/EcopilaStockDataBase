@@ -490,3 +490,61 @@ VALUES
     ON CONFLICT (external_id, node_group_id, param_key) DO UPDATE SET
     param_value = EXCLUDED.param_value,
     last_update_time = now();
+-- #####################################################################
+-- 14. PREVENCIÓN DE DUPLICADOS EN RECONEXIÓN
+-- #####################################################################
+
+-- Desactivar re-enrutamiento de datos ya procesados
+INSERT INTO sym_parameter (external_id, node_group_id, param_key, param_value, create_time, last_update_time)
+VALUES
+    -- Evitar que el router procese data_events duplicados
+    ('ALL', 'master_group', 'routing.data.reader.type.gap.retention.minutes', '1440', now(), now()),
+    ('ALL', 'master_group', 'routing.peek.ahead.window.enabled', 'true', now(), now()),
+
+    -- No reintentar batches que ya fueron exitosos
+    ('ALL', 'master_group', 'outgoing.error.override', 'false', now(), now()),
+
+    -- Prevenir duplicados en sym_data_event
+    ('ALL', 'master_group', 'routing.ignore.duplicate.batch.inserts', 'true', now(), now()),
+
+    -- No crear nuevos batches para datos ya enrutados
+    ('ALL', 'master_group', 'routing.stale.data.id.gap.time.ms', '600000', now(), now()),
+
+    -- Limpiar datos obsoletos más frecuentemente
+    ('ALL', 'master_group', 'job.purge.period.time.ms', '300000', now(), now()),
+    ('ALL', 'master_group', 'purge.data.event.age.minutes', '60', now(), now()),
+
+    -- **CRÍTICO**: No volver a disparar triggers en el master cuando recibe cambios
+    ('MASTER', 'master_group', 'sync.triggers.fire.on.load', 'false', now(), now())
+    ON CONFLICT (external_id, node_group_id, param_key) DO UPDATE SET
+    param_value = EXCLUDED.param_value,
+    last_update_time = now();
+
+-- Asegurar que los data_events antiguos se limpien
+UPDATE sym_parameter
+SET param_value = '60'
+WHERE param_key = 'purge.data.event.age.minutes'
+  AND node_group_id = 'master_group';
+
+-- #####################################################################
+-- 15. LÍMITE DE BACKLOG PARA CLIENTES OFFLINE
+-- #####################################################################
+
+INSERT INTO sym_parameter (external_id, node_group_id, param_key, param_value, create_time, last_update_time)
+VALUES
+    -- Máximo de batches pendientes por cliente (evitar acumulación infinita)
+    ('ALL', 'master_group', 'outgoing.batches.max.to.queue', '500', now(), now()),
+
+    -- Después de 500 batches, forzar reload en lugar de queue
+    ('ALL', 'master_group', 'auto.reload.reverse.enabled', 'true', now(), now()),
+    ('ALL', 'master_group', 'auto.reload.threshold.batches', '500', now(), now()),
+
+    -- Purgar batches viejos más agresivamente
+    ('ALL', 'master_group', 'purge.outgoing.cron', '0 */30 * * * *', now(), now()),
+    ('ALL', 'master_group', 'purge.data.event.age.minutes', '60', now(), now()),
+
+    -- Consolidar batches pequeños
+    ('ALL', 'master_group', 'routing.data.gap.fast.detect.boundaries', 'false', now(), now())
+    ON CONFLICT (external_id, node_group_id, param_key) DO UPDATE SET
+    param_value = EXCLUDED.param_value,
+    last_update_time = now();
