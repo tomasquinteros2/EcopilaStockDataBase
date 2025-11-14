@@ -346,8 +346,8 @@ VALUES
 
     -- === Comportamiento de Push y Pull ===
     -- El master intenta activamente enviar datos (push) cada 120 segundos.
-    ('ALL', 'master_group', 'push.period.time.ms', '120000', now(), now()),
-    -- El cliente busca activamente datos (pull) cada 10 segundos para reducir la carga.
+    ('ALL', 'master_group', 'job.push.period.time.ms', '120000', now(), now()),
+    -- El cliente busca activamente datos (pull) cada 30 segundos para reducir la carga.
     ('ALL', 'ALL', 'job.pull.period.time.ms', '30000', now(), now()),
     -- No omitir batches para nodos offline, los acumula.
     ('ALL', 'master_group', 'outgoing.batches.skip.by.node.offline', 'false', now(), now()),
