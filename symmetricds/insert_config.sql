@@ -47,36 +47,38 @@ VALUES
 -- Triggers Bidireccionales (Master ↔ Clientes)
 INSERT INTO sym_trigger (trigger_id, source_schema_name, source_table_name, channel_id,
                          sync_on_update, sync_on_insert, sync_on_delete,
-                         excluded_column_names,  -- Evita loops infinitos
+                         excluded_column_names,  -- Excluye la columna de control
+                         sync_on_incoming_batch, -- CRÍTICO: Evita bucles
                          last_update_time, create_time)
 VALUES
     -- Configuración
     ('nro_comprobante_trigger', 'public', 'nro_comprobante', 'config_channel',
-     1, 1, 1, 'last_sync_node', now(), now()),
+     1, 1, 1, 'last_sync_node', 0, now(), now()),
 
     -- Autenticación
     ('usuario_trigger', 'public', 'usuario', 'auth_channel',
-     1, 1, 1, 'last_sync_node', now(), now()),
+     1, 1, 1, 'last_sync_node', 0, now(), now()),
     ('authority_trigger', 'public', 'authority', 'auth_channel',
-     1, 1, 1, 'last_sync_node', now(), now()),
+     1, 1, 1, 'last_sync_node', 0, now(), now()),
     ('usuario_authority_trigger', 'public', 'usuario_authority', 'auth_channel',
-     1, 1, 1, 'last_sync_node', now(), now()),
+     1, 1, 1, 'last_sync_node', 0, now(), now()),
 
     -- Datos Maestros
     ('proveedor_trigger', 'public', 'proveedor', 'proveedor_channel',
-     1, 1, 1, 'last_sync_node', now(), now()),
+     1, 1, 1, 'last_sync_node', 0, now(), now()),
     ('tipo_producto_trigger', 'public', 'tipo_producto', 'tipo_producto_channel',
-     1, 1, 1, 'last_sync_node', now(), now()),
+     1, 1, 1, 'last_sync_node', 0, now(), now()),
     ('dolar_trigger', 'public', 'dolar', 'dolar_channel',
-     1, 1, 1, 'last_sync_node', now(), now()),
+     1, 1, 1, 'last_sync_node', 0, now(), now()),
 
     -- Productos (Core de tu negocio)
     ('producto_trigger', 'public', 'producto', 'producto_channel',
-     1, 1, 1, 'last_sync_node', now(), now()),
+     1, 1, 1, 'last_sync_node', 0, now(), now()),
     ('productos_relacionados_trigger', 'public', 'productos_relacionados', 'producto_channel',
-     1, 1, 1, 'last_sync_node', now(), now())
+     1, 1, 1, 'last_sync_node', 0, now(), now())
     ON CONFLICT (trigger_id) DO UPDATE SET
     excluded_column_names = EXCLUDED.excluded_column_names,
+    sync_on_incoming_batch = 0,
                                     last_update_time = now();
 
 -- Triggers Unidireccionales (Cliente → Master SOLAMENTE)
@@ -266,35 +268,26 @@ VALUES
 -- #####################################################################
 -- Esto ayuda a prevenir loops infinitos rastreando el nodo de origen
 
-DO $$
+-- Función para agregar la columna de control si no existe
+CREATE OR REPLACE FUNCTION add_sync_control_column(p_table_name TEXT)
+RETURNS VOID AS $$
 BEGIN
-    IF NOT EXISTS (
-        SELECT 1 FROM information_schema.columns
-        WHERE table_schema = 'public'
-          AND table_name = 'producto'
-          AND column_name = 'last_sync_node'
-    ) THEN
-ALTER TABLE producto ADD COLUMN last_sync_node VARCHAR(50);
-END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = p_table_name AND column_name = 'last_sync_node') THEN
+        EXECUTE 'ALTER TABLE public.' || quote_ident(p_table_name) || ' ADD COLUMN last_sync_node VARCHAR(50)';
+    END IF;
+END;
+$$ LANGUAGE plpgsql;
 
-    IF NOT EXISTS (
-        SELECT 1 FROM information_schema.columns
-        WHERE table_schema = 'public'
-          AND table_name = 'proveedor'
-          AND column_name = 'last_sync_node'
-    ) THEN
-ALTER TABLE proveedor ADD COLUMN last_sync_node VARCHAR(50);
-END IF;
-
-    IF NOT EXISTS (
-        SELECT 1 FROM information_schema.columns
-        WHERE table_schema = 'public'
-          AND table_name = 'tipo_producto'
-          AND column_name = 'last_sync_node'
-    ) THEN
-ALTER TABLE tipo_producto ADD COLUMN last_sync_node VARCHAR(50);
-END IF;
-END $$;
+-- Aplicar la columna a todas las tablas bidireccionales
+SELECT add_sync_control_column('nro_comprobante');
+SELECT add_sync_control_column('usuario');
+SELECT add_sync_control_column('authority');
+SELECT add_sync_control_column('usuario_authority');
+SELECT add_sync_control_column('proveedor');
+SELECT add_sync_control_column('tipo_producto');
+SELECT add_sync_control_column('dolar');
+SELECT add_sync_control_column('producto');
+SELECT add_sync_control_column('productos_relacionados');
 
 -- #####################################################################
 -- 10. CONFIGURACIÓN DE RED Y URLS
