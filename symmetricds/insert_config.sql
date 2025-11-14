@@ -573,3 +573,52 @@ WHERE channel_id IN (
                      'dolar_channel',
                      'producto_channel'
     );
+
+-- #####################################################################
+-- 16. CONFIGURACIÓN PARA PUSH ACTIVO A CLIENTES OFFLINE
+-- #####################################################################
+
+INSERT INTO sym_parameter (external_id, node_group_id, param_key, param_value, create_time, last_update_time)
+VALUES
+    -- **CRÍTICO**: Habilitar Push activo desde master
+    ('ALL', 'master_group', 'push.thread.per.server.count', '5', now(), now()),
+    ('ALL', 'master_group', 'push.period.time.ms', '5000', now(), now()),
+
+    -- Enviar batches pendientes al reconectar
+    ('ALL', 'master_group', 'push.maximum.number.of.batches.to.sync', '5000', now(), now()),
+
+    -- No esperar ACK del cliente (push asíncrono)
+    ('ALL', 'master_group', 'push.force.parameter.set', 'false', now(), now()),
+
+    -- Reintentar batches con error cada 2 minutos
+    ('ALL', 'master_group', 'transport.error.wait.seconds', '120', now(), now()),
+
+    -- Enviar batches aunque el cliente no haya hecho pull
+    ('ALL', 'master_group', 'outgoing.batches.skip.by.node.offline', 'false', now(), now()),
+
+    -- Habilitar estadísticas de push
+    ('ALL', 'master_group', 'statistic.record.enable', 'true', now(), now()),
+
+    -- Timeout extendido para clientes lentos
+    ('ALL', 'master_group', 'http.timeout.ms', '300000', now(), now()),
+
+    -- Permitir múltiples workers de push simultáneos
+    ('ALL', 'master_group', 'concurrent.workers', '5', now(), now()),
+
+    -- Enviar batches viejos primero (FIFO)
+    ('ALL', 'master_group', 'outgoing.batches.peek.ahead.batch.commit.size', '100', now(), now())
+    ON CONFLICT (external_id, node_group_id, param_key) DO UPDATE SET
+    param_value = EXCLUDED.param_value,
+                                                               last_update_time = now();
+
+-- Habilitar Push en los routers
+UPDATE sym_router
+SET sync_on_insert = 1,
+    sync_on_update = 1,
+    sync_on_delete = 1
+WHERE router_id = 'master_to_all_clients';
+
+-- Forzar reload de configuración de jobs
+UPDATE sym_parameter
+SET last_update_time = now()
+WHERE param_key IN ('push.period.time.ms', 'push.thread.per.server.count');
